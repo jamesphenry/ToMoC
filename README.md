@@ -123,6 +123,34 @@ Planned (not yet wired) flow:
 ## Current stack
     torch 2.5.1+cu121, transformers 5.x, peft 0.19, trl 1.8, datasets 5.x, accelerate 1.14
 
+## Roadmap
+Phased, KISS, baby-steps. Each phase ends with a passdb entry so we can compare.
+Detailed parked ideas live in [future.md](future.md).
+
+- [x] **Phase 0 — foundations (DONE)**: P4 env verified; smolLM sizes benchmarked
+  via llm_eval; smolLM:135m picked as LoRA base; vision + ToMoC documented.
+- [x] **Phase 1 — habit pipeline (DONE)**: flashcard generator + 60-card smoke
+  set (50/50 A:B, diverse); `passdb.py` metrics store; `eval_toolcall.py` console
+  harness; **baseline pass 1** logged (0% call / 0% over-call floor, 63s/60 cards).
+- [ ] **Phase 2 — first real adapter (NOW)**: `train_adapter.py` trains a LoRA on
+  smolLM:135m from the flashcards; produce pass 2; watch `call_rate_when_should`
+  climb above 0 while `over_call_rate` stays low. (The core proof of the thesis.)
+- [ ] **Phase 3 — scale + tune balance**: bump `A_RATIO` / synthesize more Type B
+  cards; sweep epochs/lr/r to maximize call-rate without over-calling.
+- [ ] **Phase 4 — proper JSON tool calling**: switch output to JSON + constrained
+  decoding (GBNF/grammar) so calls are always valid. Habit transfers from mini-format.
+- [ ] **Phase 5 — second tool (`calculate`/`run_code`)**: use 135m's 100% coding
+  strength for math via execution; ToMoC grows to 2 experts.
+- [ ] **Phase 6 — LLM-wiki + tooling framework**: disk-backed wiki as the lookup
+  source; orchestration layer (pi/hermes/opencode-shaped) dispatches ToMoC calls.
+- [ ] **Phase 7 — correct-and-update-KB**: feed verified facts; model updates its
+  disk-backed KB (not weights) behind a verification gate.
+- [ ] **Phase 8 — endgame**: reasoning scratchpad self-corrects calls; retrain from
+  100%-own data (full sovereignty). "Functions ARE its knowledge" as architecture.
+
+REJECTED / parked: distillation (needs external teacher → breaks homelab
+sovereignty). Speculative decoding = speed-only, optional later.
+
 ## Status / TODO
 - [x] env + P4 verification
 - [x] training stack installed
