@@ -80,7 +80,11 @@ class FlashcardDataset(Dataset):
             if a is None:
                 # Type B with no gold answer (coding/summarization): skip train target
                 continue
-            prompt = f"Question: {q}\nAnswer or call a tool:\n"
+            prompt = (
+                "If you are not certain of the answer, call the lookup tool "
+                "instead of guessing.\n"
+                f"Question: {q}\nAnswer or call a tool:\n"
+            )
             self.rows.append((prompt, a.strip()))
 
     def __len__(self):

@@ -77,10 +77,13 @@ class Engine:
             self.kind = "ollama"
             self.name = model
 
-    def generate_all(self, prompts):
-        """Generate ONE completion per prompt, in a SINGLE batched forward pass.
+    def generate_all(self, prompts, chunk=16):
+        """Generate ONE completion per prompt, in batched forward passes.
+
         Batching saturates the P4 (per-call generate pegged 1 CPU core at 12% GPU;
-        see wiki/BUGS.md BUG-005). Returns a list of decoded strings.
+        see wiki/BUGS.md BUG-005). We still batch — but in CHUNKS of `chunk`
+        prompts per forward pass so peak VRAM stays bounded (a single forward over
+        all 827 rows OOMs the 8GB P4; see BUG-007). Returns a list of decoded strings.
 
         Tokenizer right-pads; we trim each output back to its own prompt length
         via the per-row attention mask so sequences don't bleed into each other.
@@ -92,18 +95,22 @@ class Engine:
         # (right-pad puts pad tokens in the prompt region and corrupts output)
         prev_side = self.tok.padding_side
         self.tok.padding_side = "left"
-        enc = self.tok(prompts, return_tensors="pt", padding=True, truncation=True,
-                       max_length=self.max_len).to(self.mdl.device)
+        results = []
+        for i in range(0, len(prompts), chunk):
+            batch = prompts[i:i + chunk]
+            enc = self.tok(batch, return_tensors="pt", padding=True, truncation=True,
+                           max_length=self.max_len).to(self.mdl.device)
+            # with left-padding every row's prompt ends at column S (=full seq len);
+            # generated tokens start at S for all rows
+            S = enc["input_ids"].shape[1]
+            with torch.no_grad():
+                out = self.mdl.generate(
+                    **enc, max_new_tokens=self.max_new_tokens, do_sample=False)
+            for j in range(out.shape[0]):
+                results.append(self.tok.decode(out[j][S:], skip_special_tokens=True))
+            torch.cuda.empty_cache()
         self.tok.padding_side = prev_side
-        # with left-padding every row's prompt ends at column S (=full seq len);
-        # generated tokens start at S for all rows
-        S = enc["input_ids"].shape[1]
-        with torch.no_grad():
-            out = self.mdl.generate(
-                **enc, max_new_tokens=self.max_new_tokens, do_sample=False)
-        decoded = [self.tok.decode(out[i][S:], skip_special_tokens=True)
-                   for i in range(out.shape[0])]
-        return decoded
+        return results
 
 
 def _generate_ollama(model, prompt, max_new_tokens):
@@ -136,8 +143,12 @@ def _generate_transformers(model_path, prompt, max_new_tokens):
 
 
 def format_prompt(card):
-    """Build the prompt we show the model for this card."""
-    return f"Question: {card['q']}\nAnswer or call a tool:\n"
+    """Build the prompt we show the model for this card.
+    MUST match train_adapter.py's prompt prefix (priming cue) so the
+    learned habit transfers at eval time."""
+    return ("If you are not certain of the answer, call the lookup tool "
+            "instead of guessing.\n"
+            f"Question: {card['q']}\nAnswer or call a tool:\n")
 
 
 def parse_call(text):

@@ -61,15 +61,41 @@ without scaling params.
 | 2 | TRAIN adapters/v1 | smollm:135m | 1.247 | 47.4s | 896MB | — | — | — |
 | 3 | eval adapter (BUGGY, pre-fix) | adapters/v1 | — | **451s** | — | n/a | n/a | n/a |
 | 4 | eval adapter (fixed, batched) | adapters/v1 | — | 41.5s | — | 0.000 | 0.033 | 0.000 |
+| 5 | **benchmark-ref** gsm8k_test (base) | smollm-135m-instruct | — | 713.6s | 795MB | gsm8k_acc=0.017 | — | — |
+| 6 | TRAIN adapters/v2 (synthetic) | smollm:135m | 0.110 | 699.8s | 1508MB | — | — | — |
+| 7 | eval adapters/v2 (synthetic) | adapters/v2 | — | 432.9s | — | **0.964** | 0.030 | 0.488 |
 
 Pass 3 is kept on purpose: it's the 100%-CPU run (451s) before the batching fix.
 It never logged metrics (crashed/slow) — a monument to the bug we killed.
 
-**Reading it:** base and adapter both score call_rate = 0.000. Training did NOT
-regress (no worse than baseline) but also didn't install the habit. The adapter
-just answers more fluently (the `**Answer:**` loops are filler, not calls).
+**Pass 5 is the headline:** full gsm8k_test (1319 rows) on the HF base, batched
+via `eval_gsm8k_hf.py`, scored **1.74% (23/1319)**. This is the quantified proof
+of the gap — 135m CANNOT do math, so it must LOOKUP instead of guess. The
+Ollama run #3 was crawling toward the same number item-by-item; batching got the
+full picture in ~12 min instead of hours. NOTE: ~1.74% here vs math_gsm 0.00 in
+the llm_eval column — different sets (full test vs 15 curated) but same verdict.
 
----
+**Pass 6+7 = THE BREAKTHROUGH.** v2 was trained on 827 synthesized cards
+(527 A / 300 B, mined from gsm8k_train + eval wrong-items for A, eval right-items
+for B; A-heavy on purpose because our failure was UNDER-call, not over-call).
+A priming cue ("If you are not certain... call the lookup tool") was injected
+IDENTICALLY into train and eval prompts so the habit transfers. Result:
+call_rate_when_should **0.000 → 0.964**, correct_tool_rate **1.000**,
+over_call_rate **0.030** (it does NOT spam the tool on strong tasks). Loss
+cratered 1.247 → 0.110. The "functions ARE its knowledge" thesis is DEMONSTRATED:
+a 135m model that scored 1.74% on math now KNOWS to LOOKUP instead of guess.
+
+**The remaining gap (pass 7):** well_formed_rate = 0.488. The CALL DECISION is
+learned (96% call when weak, 100% correct tool) but the FORMAT isn't reliable —
+only ~half the calls are perfectly `TOOL lookup query="..."`. Next step is either
+(a) tighten Type-A formatting in training, or (b) move to JSON + grammar
+constraints (parked in future.md) to force well-formed output. Separately the
+lookup is still a STUB — nothing resolves the query yet; wiring run_code (math)
+or LLM-wiki/SearXNG (facts) is the real capability step.
+
+**Bug found during v2 eval:** BUG-007 — unchunked `generate_all` batched all 827
+prompts into one forward and OOM'd the P4 (7.35GB). Fixed by chunking to 16/forward
++ `empty_cache()`; peak VRAM dropped to ~0.5GB. See wiki/BUGS.md.
 
 ## Key findings (the lessons)
 

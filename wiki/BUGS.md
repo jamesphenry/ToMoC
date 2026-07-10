@@ -112,6 +112,22 @@
   the 8GB P4. If a bigger base ever OOMs, that's a model-size problem, not a
   "stop ollama" fix.
 
+## BUG-007 — unchunked batched eval OOMs the 8GB P4
+- **Symptom**: `eval_toolcall.py --model adapters/v2 --data flashcards2.jsonl`
+  (827 cards) died with `torch.OutOfMemoryError: tried to allocate 374 MiB`
+  while 7.35 GiB was "in use" (5.55 allocated + 1.67 reserved-but-unallocated).
+- **Root cause**: `Engine.generate_all` batched ALL prompts into ONE forward
+  pass (correct for BUG-005's CPU fix, but at 827×256 tokens the single forward
+  exceeded the P4). The caching allocator had also eagerly reserved a 5.5GB pool
+  from training, leaving <100MB free. Fragmentation, not live tensors.
+- **Fix**: chunk `generate_all` into `chunk=16` prompts per forward pass (loop +
+  `torch.cuda.empty_cache()` between chunks). Peak VRAM dropped 7.35GB → ~0.5GB.
+  Also set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to fight
+  fragmentation. Batching is preserved (still not one-reload-per-call), just
+  bounded per forward.
+- **Caught**: eval run after v2 training (pass 6) completed.
+- **Verified**: re-run with chunk=16 → GPU mem 553 MiB, process alive, no OOM.
+
 ---
 
 ## How to add a bug
