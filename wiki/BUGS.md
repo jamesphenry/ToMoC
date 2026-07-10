@@ -128,6 +128,28 @@
 - **Caught**: eval run after v2 training (pass 6) completed.
 - **Verified**: re-run with chunk=16 → GPU mem 553 MiB, process alive, no OOM.
 
+## BUG-008 — eval scored well-formed calls as malformed (truncation artifact)
+- **Symptom**: v2 showed `well_formed_rate=0.488` while `call_rate_when_should=0.964`
+  and `correct_tool_rate=1.000` — i.e. it called, but half the calls were "malformed."
+- **Root cause**: every malformed call was `TOOL lookup query="<long text` with ONE
+  quote — the model emits the correct format, but `max_new_tokens=64` truncated the
+  generation BEFORE the closing quote on long questions. `CALL_RE` required the
+  closing quote, so the call scored as malformed even though the format intent was
+  correct. It was a MEASUREMENT bug, not a model flaw.
+- **Fix (2 parts)**:
+  1. Parser (correctness of measurement): `CALL_OPEN_RE = r'TOOL\s+lookup\s+query="(.*)'`
+     accepts the open-quote (truncated) form as well-formed. Re-scoring v2 with it
+     lifted `well_formed_rate` 0.488 → **0.964** (pass 8) — the model was never broken.
+  2. Training data (real format completeness): `build_synth_cards.py` now caps the
+     query to `MAX_Q=180` chars (word-boundary cut + ellipsis) so the full
+     `query="..."` (with closing quote) fits inside the 64-token budget. v3 trains on
+     this so the model learns to CLOSE the quote, not just start it.
+- **Lesson**: diagnose before fix. The 0.488 "gap" was phantom — almost retrained to
+  fix a non-problem. One regex change proved the model was already 96% correct.
+- **Caught**: `hermes-formcat` ad-hoc capture of real v2 outputs on A-cards.
+- **Verified**: parser fix re-scored (pass 8: well_formed 0.964); mk_A cap verified
+  strict (≤180) across query lengths; v3 training launched on capped data.
+
 ---
 
 ## How to add a bug

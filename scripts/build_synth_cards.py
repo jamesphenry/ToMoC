@@ -34,6 +34,11 @@ LLM_EVAL = os.path.expanduser("~/llm_eval")
 GSM_TRAIN = os.path.join(LLM_EVAL, "datasets", "gsm8k_train.jsonl")
 EVAL_DB = os.path.join(LLM_EVAL, "eval.db")
 
+# max characters we keep in a lookup query so the full `query="..."` (with the
+# closing quote) fits inside the eval's max_new_tokens budget. ~40 tokens of headroom
+# for "TOOL lookup query=\"" + closing quote at 64 new tokens (BUG-008).
+MAX_Q = 180
+
 
 def load_gsm(n):
     out = []
@@ -46,9 +51,18 @@ def load_gsm(n):
             q = q.strip()
             if not q:
                 continue
-            out.append({"type": "A", "src": "gsm8k_train",
-                        "q": q, "a": f'TOOL lookup query="{q}"'})
+            out.append(mk_A(q))
     return out
+
+
+def mk_A(q, src="gsm8k_train"):
+    """Build a Type A (lookup) card, truncating the query so the full
+    `query="..."` (with closing quote) fits the eval token budget (BUG-008)."""
+    if len(q) > MAX_Q:
+        # leave room for the ellipsis, cut at a word boundary
+        q = q[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
+    return {"type": "A", "src": src,
+            "q": q, "a": f'TOOL lookup query="{q}"'}
 
 
 def load_from_eval():
@@ -68,8 +82,7 @@ def load_from_eval():
         if not q:
             continue
         if it["correct"] == 0 and it["task_id"] in ("knowledge_qa", "reasoning_logic"):
-            a.append({"type": "A", "src": f"eval.{it['task_id']}",
-                      "q": q, "a": f'TOOL lookup query="{q}"'})
+            a.append(mk_A(q, src=f"eval.{it['task_id']}"))
         elif it["correct"] == 1 and it["task_id"] in (
             "coding_func", "brainteasers", "summarization",
             "knowledge_qa", "reasoning_logic",

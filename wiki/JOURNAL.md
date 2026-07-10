@@ -63,7 +63,15 @@ without scaling params.
 | 4 | eval adapter (fixed, batched) | adapters/v1 | — | 41.5s | — | 0.000 | 0.033 | 0.000 |
 | 5 | **benchmark-ref** gsm8k_test (base) | smollm-135m-instruct | — | 713.6s | 795MB | gsm8k_acc=0.017 | — | — |
 | 6 | TRAIN adapters/v2 (synthetic) | smollm:135m | 0.110 | 699.8s | 1508MB | — | — | — |
-| 7 | eval adapters/v2 (synthetic) | adapters/v2 | — | 432.9s | — | **0.964** | 0.030 | 0.488 |
+| 7 | eval adapters/v2 (synthetic) | adapters/v2 | — | 432.9s | — | **0.964** | 0.030 | 0.488 ⚠️ |
+| 8 | eval adapters/v2 **re-scored** (BUG-008 parser fix) | adapters/v2 | — | 897.8s | — | **0.964** | 0.030 | **0.964** |
+| 9 | TRAIN adapters/v3 (capped-query, MAX_Q=180) | smollm:135m | 0.149 | 889.5s | 1112MB | — | — | — |
+
+⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
+the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
+truncated long questions before the closing quote. The parser (BUG-008 fix) accepts
+the open-quote form → `well_formed` jumps to **0.964** at pass 8. The model was
+never broken; our scoring couldn't see the closing quote.
 
 Pass 3 is kept on purpose: it's the 100%-CPU run (451s) before the batching fix.
 It never logged metrics (crashed/slow) — a monument to the bug we killed.

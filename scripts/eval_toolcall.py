@@ -30,6 +30,10 @@ ROOT = os.path.dirname(HERE)
 DEFAULT_BASE = os.path.join(ROOT, "models", "smollm-135m-instruct")
 
 CALL_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)"', re.DOTALL)
+# open-quote form: a call that started the query with a quote but may have been
+# truncated by max_new_tokens before the closing quote arrived. We still count it
+# well-formed — the format intent is unambiguous (see BUG-008).
+CALL_OPEN_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)', re.DOTALL)
 # looser first-pass detector: did it emit anything resembling a TOOL line?
 TOOL_HINT_RE = re.compile(r'TOOL\s+(\w+)', re.IGNORECASE)
 
@@ -156,6 +160,11 @@ def parse_call(text):
     m = CALL_RE.search(text)
     if m:
         return True, "lookup", m.group(1), True
+    # open-quote form: truncated before the closing quote (max_new_tokens cut it
+    # off mid-string). Format intent is unambiguous -> well-formed (BUG-008).
+    m2 = CALL_OPEN_RE.search(text)
+    if m2:
+        return True, "lookup", m2.group(1), True
     hint = TOOL_HINT_RE.search(text)
     if hint:
         # emitted a TOOL line but not well-formed
@@ -234,6 +243,7 @@ def main():
     db.log_meta(pid, "run_type", "baseline" if "smollm" in args.model and "/" not in args.model else "adapter")
     db.log_meta(pid, "data", os.path.basename(args.data))
     db.summarize(pid)
+    db.cost_report()
     db.close()
 
 

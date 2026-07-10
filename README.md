@@ -5,6 +5,10 @@
 > function with the right argument. The functions ARE its knowledge.
 > Everything here is experimental, fast-and-loose, villain-coded.
 
+> 🔌 **Total electricity cost so far: $0.0148** across 9 training/eval passes
+> (1.18 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
+> Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
+
 ## The thesis
 A small model can't store much. So instead of memorizing facts, it learns to
 emit a tool/function call when it hits a gap: "I don't know from memory → go

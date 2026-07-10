@@ -190,6 +190,7 @@ def main():
     db.log_meta(pid, "adapter_path", args.out)
     db.log_meta(pid, "data", os.path.basename(args.data))
     db.summarize(pid)
+    db.cost_report()
     db.close()
     print(f"logged pass id={pid}")
 
