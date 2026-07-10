@@ -27,6 +27,7 @@ from passdb import PassDB
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+DEFAULT_BASE = os.path.join(ROOT, "models", "smollm-135m-instruct")
 
 CALL_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)"', re.DOTALL)
 # looser first-pass detector: did it emit anything resembling a TOOL line?
@@ -40,10 +41,69 @@ def load_cards(path):
 
 def generate(model, prompt, max_new_tokens=64):
     """Generate one completion. Uses transformers if a local path is given,
-    else falls back to Ollama's /api/generate for a named model."""
+    else falls back to Ollama's /api/generate for a named model.
+
+    `model` is the identifier string (path or Ollama name). For transformers
+    paths this RELOADS the model every call — use load_engine() for batch evals
+    so the model is loaded once. Kept for one-off use."""
     if os.path.isdir(model) or model.endswith(".gguf"):
         return _generate_transformers(model, prompt, max_new_tokens)
     return _generate_ollama(model, prompt, max_new_tokens)
+
+
+class Engine:
+    """Loads a model ONCE, then generates many completions cheaply.
+    Used by evaluate() so we don't reload 60x (was the dominant cost)."""
+    def __init__(self, model, max_new_tokens=64, max_len=512):
+        self.max_new_tokens = max_new_tokens
+        self.max_len = max_len
+        if os.path.isdir(model) or model.endswith(".gguf"):
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            import torch
+            self.kind = "local"
+            self.tok = AutoTokenizer.from_pretrained(model)
+            # If this dir is a LoRA adapter (no full base), load base + attach.
+            is_adapter = os.path.exists(os.path.join(model, "adapter_config.json"))
+            if is_adapter:
+                from peft import PeftModel
+                base = DEFAULT_BASE
+                base_mdl = AutoModelForCausalLM.from_pretrained(
+                    base, dtype=torch.float16, device_map="auto")
+                self.mdl = PeftModel.from_pretrained(base_mdl, model)
+            else:
+                self.mdl = AutoModelForCausalLM.from_pretrained(
+                    model, dtype=torch.float16, device_map="auto")
+        else:
+            self.kind = "ollama"
+            self.name = model
+
+    def generate_all(self, prompts):
+        """Generate ONE completion per prompt, in a SINGLE batched forward pass.
+        Batching saturates the P4 (per-call generate pegged 1 CPU core at 12% GPU;
+        see wiki/BUGS.md BUG-005). Returns a list of decoded strings.
+
+        Tokenizer right-pads; we trim each output back to its own prompt length
+        via the per-row attention mask so sequences don't bleed into each other.
+        """
+        import torch
+        if self.kind != "local":
+            return [_generate_ollama(self.name, p, self.max_new_tokens) for p in prompts]
+        # decoder-only models need LEFT padding for correct batched generation
+        # (right-pad puts pad tokens in the prompt region and corrupts output)
+        prev_side = self.tok.padding_side
+        self.tok.padding_side = "left"
+        enc = self.tok(prompts, return_tensors="pt", padding=True, truncation=True,
+                       max_length=self.max_len).to(self.mdl.device)
+        self.tok.padding_side = prev_side
+        # with left-padding every row's prompt ends at column S (=full seq len);
+        # generated tokens start at S for all rows
+        S = enc["input_ids"].shape[1]
+        with torch.no_grad():
+            out = self.mdl.generate(
+                **enc, max_new_tokens=self.max_new_tokens, do_sample=False)
+        decoded = [self.tok.decode(out[i][S:], skip_special_tokens=True)
+                   for i in range(out.shape[0])]
+        return decoded
 
 
 def _generate_ollama(model, prompt, max_new_tokens):
@@ -92,15 +152,20 @@ def parse_call(text):
     return False, None, None, False
 
 
-def evaluate(model, cards, verbose=False):
+def evaluate(engine, cards, verbose=False):
     a_cards = [c for c in cards if c["type"] == "A"]
     b_cards = [c for c in cards if c["type"] == "B"]
     stats = {"A_total": len(a_cards), "B_total": len(b_cards),
              "A_called": 0, "A_wellformed": 0, "A_correct_tool": 0,
              "B_called": 0, "B_wellformed": 0}
 
-    def run(card, is_A):
-        out = generate(model, format_prompt(card))
+    all_cards = a_cards + b_cards
+    total = len(all_cards)
+    prompts = [format_prompt(c) for c in all_cards]
+    # ONE batched forward pass (was 60 separate calls -> 100% CPU / 12% GPU).
+    outputs = engine.generate_all(prompts)
+    for i, (card, out) in enumerate(zip(all_cards, outputs)):
+        is_A = card["type"] == "A"
         called, tool, query, wf = parse_call(out)
         if is_A:
             stats["A_called"] += int(called)
@@ -114,11 +179,8 @@ def evaluate(model, cards, verbose=False):
             print(f"[{tag}] called={called} tool={tool} wf={wf}")
             print(f"    Q: {card['q'][:70]}")
             print(f"    -> {out.strip()[:80]!r}\n")
-
-    for c in a_cards:
-        run(c, True)
-    for c in b_cards:
-        run(c, False)
+        if (i + 1) % 10 == 0 or (i + 1) == total:
+            print(f"  ... {i+1}/{total} cards scored", flush=True)
 
     metrics = {}
     if stats["A_total"]:
@@ -141,7 +203,8 @@ def main():
     cards = load_cards(args.data)
     print(f"eval_toolcall: model={args.model} cards={len(cards)}")
     t0 = time.time()
-    metrics, stats = evaluate(args.model, cards, verbose=args.verbose)
+    engine = Engine(args.model)
+    metrics, stats = evaluate(engine, cards, verbose=args.verbose)
     wall = time.time() - t0
 
     print("\n=== results ===")
