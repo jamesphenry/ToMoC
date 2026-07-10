@@ -28,7 +28,7 @@ from passdb import PassDB
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-CALL_RE = re.compile(r'TOOL\s+lookup\s+query="(.+?)"\s*"$', re.DOTALL)
+CALL_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)"', re.DOTALL)
 # looser first-pass detector: did it emit anything resembling a TOOL line?
 TOOL_HINT_RE = re.compile(r'TOOL\s+(\w+)', re.IGNORECASE)
 
