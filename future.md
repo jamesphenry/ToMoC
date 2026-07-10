@@ -56,9 +56,58 @@
   arg? (Not raw accuracy — the call decision is the metric.)
 - llm_eval remains the benchmark for base-model ranking only.
 
+## Destination / model-feature map (user curiosity, ELI5)
+Where the project COULD grow. None is v1; tool-call is priority. Captured so
+the end-goal is documented, not lost.
+
+GUIDING PRINCIPLE (user, 2026-07-10): homelab-first, wean off LLM providers,
+no external services whenever possible, keep requirements LOW. "Disks are
+cheap, VRAM isn't." Functions are knowledge.
+
+- MoE (Mixture of Experts): team of specialists + a router picking 1-2 per
+  question; only those wake up -> small/fast but smart. Classic MoE bakes
+  experts into the MODEL WEIGHTS (needs them in VRAM).
+- ToMoC (Tool-Routed Mixture of Capabilities) — USER-COINED, the chosen path:
+  the "router" is the model's decision to CALL A TOOL; the "experts" are
+  EXTERNAL (LLM-wiki, calculator, lookup) living on DISK, not in weights.
+  -> 135m stays tiny forever; capability scales by ADDING TOOLS, not params.
+  -> No weight-MoE needed; the tooling framework (below) IS the orchestration.
+  -> v1 LoRA (lookup-or-not) is already the first router. Scaling to "MoE" =
+     add tools + orchestration, not retrain architecture. Matches "disk cheap,
+     VRAM isn't" exactly.
+- Reasoning: model thinks out-loud (scratchpad) before answering. = the parked
+  "self-correct JSON" idea. Upgrade that makes tool calls cleaner, post-v1.
+- Distillation: small model (student) copies a big model's (teacher) behavior.
+  REJECTED for this project — not a params problem, a DEPENDENCY problem: the
+  teacher is usually an external/API model, which violates the homelab-sovereignty
+  goal. Out. (Your instinct was right for a deeper reason than params.)
+- Speculative/draft decoding: write several tokens, verify, rewind if wrong.
+  SPEED only, irrelevant to the tool mission, but nice on the slow P4.
+- RAG (retrieval-augmented): look up facts from a store before answering. OUR
+  `lookup` tool IS micro-RAG. The LLM-wiki idea = RAG-with-benefits.
+
+### Goals beyond v1 (user, captured)
+- CORRECT-AND-UPDATE-KB: ability to correct the model with VERIFIED facts; it
+  should update its own knowledge base (the disk-backed wiki), not its weights.
+  -> Embodies "disks cheap, VRAM isn't": knowledge lives on disk, fix it there.
+  -> Implies the KB needs a write path (not just lookup), plus a verification
+  gate so bad corrections don't poison it. Post-v1, post-tooling-framework.
+- BUILD FROM SCRATCH (end-state ambition): after this experiment, user wants to
+  create everything from scratch with 100%-own data (tokenizer, corpus, training
+  set) — full sovereignty, no borrowed base. Long-term; v1 still uses smolLM:135m
+  as a pragmatic bootstrap. Note the tension: "from scratch" is a big lift; the
+  ToMoC tool-layer softens it (capability comes from tools, not the base model).
+
+Possible end-state: a tiny 135m router (v1 LoRA habit) that dispatches to
+external ToMoC experts (lookup, calculate, LLM-wiki) via a homelab tooling
+framework; a reasoning scratchpad self-corrects calls; the KB is user-correctable
+and disk-backed; eventually retrained from 100% own data. All small, all on the
+P4, zero external dependencies. "Functions ARE its knowledge" as an ARCHITECTURE.
+
 ## Tooling framework (far-future, user note)
 - The project will eventually need a TOOLING framework (orchestration / agent
   loop around the model's tool calls), motivated by the LLM-wiki + baked-in
-  knowledge ideas. User name-dropped pi, hermes, opencode as shape refs.
+  knowledge ideas + ToMoC dispatch. User name-dropped pi, hermes, opencode as
+  shape refs.
 - NOT locked in; not v1. Discuss much later — after the base lookup habit
   and the wiki-as-tool-catalog idea are proven. Just captured so it's not lost.

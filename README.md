@@ -12,6 +12,25 @@ look it up." The model's *functions become its knowledge*. Reasoning quality
 matters more than raw knowledge — we want it to pick the right tool, not to
 already know the answer.
 
+## Vision (where this is going)
+This lab is a learning experiment with a real goal: **wean off LLM providers**
+and run sovereign intelligence on homelab hardware. Principles:
+- **Homelab-first, no external services.** If it needs an API call, it's out.
+- **Disks are cheap, VRAM isn't.** Knowledge lives on disk (tools, a wiki), not
+  in model weights. The model stays tiny; capability scales by *adding tools*,
+  not parameters.
+- **Functions ARE its knowledge.** The model doesn't memorize — it decides *where
+  to look*, then calls that tool.
+
+The endgame architecture is **ToMoC** (Tool-Routed Mixture of Capabilities):
+the model's tool-call decision is the *router*, and the "experts" are external,
+disk-backed tools (lookup, calculator, a user-correctable LLM-wiki). v1 just
+teaches the first router habit (call `lookup` when stuck); scaling to "MoE" means
+adding tools + orchestration, never retraining a bigger model. Longer-term
+ambitions (correct-the-KB-with-verified-facts, build-everything-from-scratch
+with 100% own data) are parked in [future.md](future.md) — tool-calling is the
+priority for now.
+
 SmolLM (135M / 360M / 1.7B) is a chat model with NO tool support —
 confirmed against local Ollama (`does not support tools`). The lab's job is to
 teach it tool calling anyway via a LoRA adapter that emits a tool-call "script."
@@ -108,7 +127,9 @@ Planned (not yet wired) flow:
 - [x] env + P4 verification
 - [x] training stack installed
 - [x] benchmark smolLM sizes (llm_eval) — 135m selected as LoRA base
-- [ ] build tool-call "flashcard" dataset in data/raw (target 135m's weak tasks:
-      math, knowledge_qa, reasoning)
-- [ ] LoRA training script in scripts/
-- [ ] evaluate adapter via llm_eval
+- [x] flashcard generator (scripts/build_flashcards.py) + v1 smoke set
+      (data/raw/flashcards.jsonl, 60 cards, 50/50 A:B, diverse)
+- [x] passdb metrics store (scripts/passdb.py) — logs every training/eval pass
+- [ ] LoRA training script in scripts/ (train_adapter.py)
+- [ ] evaluate adapter via scripts/eval_toolcall.py (uses passdb)
+- [ ] baseline (base model, no adapter) eval pass for comparison

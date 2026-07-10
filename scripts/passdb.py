@@ -48,6 +48,9 @@ class PassDB:
                 a_ratio     REAL,
                 loss_final  REAL,
                 loss_train  REAL,
+                walltime_s  REAL,
+                gpu_mem_used_mb REAL,
+                gpu_util_pct REAL,
                 status      TEXT DEFAULT 'done'
             );
             CREATE TABLE IF NOT EXISTS pass_metrics (
@@ -72,6 +75,7 @@ class PassDB:
         cols = {
             "base_model", "lora_r", "lora_alpha", "epochs", "lr",
             "num_cards", "a_ratio", "loss_final", "loss_train", "status",
+            "walltime_s", "gpu_mem_used_mb", "gpu_util_pct",
         }
         f = {k: fields[k] for k in cols if k in fields}
         f["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -112,7 +116,8 @@ class PassDB:
         ).fetchone()
         print(f"=== pass {pass_id} ({p['created_at']}) ===")
         for k in ("base_model", "lora_r", "lora_alpha", "epochs", "lr",
-                  "num_cards", "a_ratio", "loss_final", "status"):
+                  "num_cards", "a_ratio", "loss_final", "loss_train",
+                  "walltime_s", "gpu_mem_used_mb", "gpu_util_pct", "status"):
             if p[k] is not None:
                 print(f"  {k}: {p[k]}")
         print("  -- metrics --")
