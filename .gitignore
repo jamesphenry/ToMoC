@@ -1,0 +1,30 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Virtual env (huge, regenerable from requirements.lock.txt) ---
+.venv/
+venv/
+
+# --- Model weights (download or train; never commit) ---
+models/
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+
+# --- Generated / runtime artifacts ---
+adapters/
+logs/
+data/processed/
+benchmarks/*.json
+benchmarks/*.csv
+benchmarks/*.db
+.ipynb_checkpoints/
+
+# --- OS / editor ---
+.DS_Store
+*.swp

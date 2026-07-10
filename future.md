@@ -55,3 +55,10 @@
 - Measures: did the model emit a tool call when it should? correct tool? correct
   arg? (Not raw accuracy — the call decision is the metric.)
 - llm_eval remains the benchmark for base-model ranking only.
+
+## Tooling framework (far-future, user note)
+- The project will eventually need a TOOLING framework (orchestration / agent
+  loop around the model's tool calls), motivated by the LLM-wiki + baked-in
+  knowledge ideas. User name-dropped pi, hermes, opencode as shape refs.
+- NOT locked in; not v1. Discuss much later — after the base lookup habit
+  and the wiki-as-tool-catalog idea are proven. Just captured so it's not lost.
