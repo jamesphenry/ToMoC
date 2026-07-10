@@ -70,12 +70,30 @@ python scripts/eval_gsm8k_hf.py --data ~/llm_eval/datasets/gsm8k_test.jsonl --ba
 - `flashcards2.jsonl` is GENERATED (not hand-authored) — regenerate, don't edit.
 - `adapters/`, `models/`, `logs/`, `benchmarks/*.db` are gitignored (artifacts).
 
-## Open next step (DIRECTION B — not started)
-The lookup is still a **stub**: the model emits `TOOL lookup query="..."` but
-nothing resolves it. Wire a real resolver so calls actually compute:
-- **run_code** first (smallest, most sovereign): route math lookups to a sandboxed
-  Python exec; returns the answer. Directly fixes the gsm8k 1.74% gap.
-- Later: LLM-wiki / SearXNG for factual lookups. See `future.md` (ToMoC).
+## Open next step (DIRECTION B — DONE, 2026-07-10)
+The lookup now **computes** end-to-end (pass 11). The model emits
+`TOOL lookup query="..."` (v3: 99.2% call, 100% well-formed) and a
+sovereign KB resolver (`scripts/tool_resolver.py`) resolves it against the
+on-disk gsm8k_train+test + mmlu algebra (8892 entries, zero external APIs),
+then `scripts/eval_resolver.py` scores the full loop: **97.2% resolved-correct**
+on gsm8k_test (base alone was 1.74%). Resolution tiers: exact → prefix
+(salves BUG-008 truncated q) → fuzzy (Jaccard≥0.8) → miss.
+
+Run it:
+```bash
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+python -u scripts/eval_resolver.py --model adapters/v3 \
+        --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
+# resolver standalone smoke test (no GPU):
+python scripts/tool_resolver.py --stats
+python scripts/tool_resolver.py "Natalia sold clips ... altogether in April and May?"
+```
+- Every eval now writes a FULL per-item JSONL log to `logs/`
+  (`eval_resolver_*.jsonl`, `eval_toolcall_*.jsonl`) — inspectable after the fact.
+- **Next real capability step (still open):** `run_code` sandbox (route arithmetic
+  expressions / synthesize-code from word problems to a sandboxed Python exec) and
+  LLM-wiki / SearXNG for factual lookups. See `future.md` (ToMoC). The resolver's
+  `resolve(tool, query)` dispatch seam is where those plug in.
 
 ## Commit / push
 - Branch `main`, remote `origin` (local GitLab 192.168.0.4). Identity

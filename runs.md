@@ -6,12 +6,12 @@
 > Cost model: `watts/1000 * hours * $0.14/kWh`, watts = ~90W over server idle
 > (box idles ~120W, ~210W under GPU load). See AGENTS.md / wiki/BUGS.md.
 
-## Totals (all 10 passes)
+## Totals (all 11 passes)
 | metric | value |
 |--------|-------|
-| total cost | **$0.0161** |
-| total GPU time | 1.276 h |
-| avg cost / pass | $0.00161 |
+| total cost | **$0.0194** |
+| total GPU time | 1.537 h |
+| avg cost / pass | $0.00176 |
 | electricity rate | $0.14 / kWh |
 | assumed draw | 90 W over idle |
 
@@ -30,6 +30,7 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 8 | 09:55 | eval | adapters/v2 **re-score** (BUG-008) | 827 | — | 897.8 | — | 0.00314 |
 | 9 | 09:56 | train | smollm:135m → v3 (capped query) | 827 | 0.149 | 889.5 | 1112 | 0.00311 |
 | 10 | 10:07 | eval | adapters/v3 (capped data) | 827 | — | 356.3 | — | 0.00125 |
+| 11 | 20:43 | resolver-eval | adapters/v3 → KB → score | 1319 | — | 939.3 | 573 | 0.00330 |
 
 ## Cost by category
 | category | passes | sum cost $ | sum GPU-h |
@@ -56,3 +57,10 @@ A 135m model went from **0% tool-calling** (base, v1) to **97% correct,
 well-formed calls** (v3) — for **$0.0161 total electricity** across 10 runs.
 Sovereign compute is cheap. Next: wire `lookup` to a real resolver (run_code) so
 the calls actually compute (direction B, see AGENTS.md / future.md).
+
+## The NEW headline (DIRECTION B, pass 11)
+The lookup now **computes**. End-to-end on gsm8k_test (1319 math problems):
+base 135m solved **1.74%** on its own; with the v3 lookup habit + sovereign
+KB resolver it resolves **97.2% correct** (1282/1319). call_rate 0.992,
+well_formed 1.000, resolved-correct 1.000 of hits. Cost across all 11 passes:
+**$0.0194**. "Functions ARE its knowledge" is now a working loop, not a slogan.

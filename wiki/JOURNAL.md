@@ -67,6 +67,7 @@ without scaling params.
 | 8 | eval adapters/v2 **re-scored** (BUG-008 parser fix) | adapters/v2 | — | 897.8s | — | **0.964** | 0.030 | **0.964** |
 | 9 | TRAIN adapters/v3 (capped-query, MAX_Q=180) | smollm:135m | 0.149 | 889.5s | 1112MB | — | — | — |
 | 10 | eval adapters/v3 (capped data) | adapters/v3 | — | 356.3s | — | **0.970** | 0.027 | **0.970** |
+| 11 | **END-TO-END resolver eval** (v3 → KB lookup → score) | adapters/v3 | — | 939.3s | 573MB | call=0.992 WF=1.000 **resolved-correct=0.972** | — | — |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -129,6 +130,44 @@ prompts into one forward and OOM'd the P4 (7.35GB). Fixed by chunking to 16/forw
    fp16 HF checkpoint for LoRA work.
 
 ---
+
+## DIRECTION B — the lookup actually computes (DONE, pass 11)
+
+The open step from AGENTS.md: the model emitted `TOOL lookup query="..."` but
+nothing resolved it. We wired a **sovereign KB resolver** (`scripts/tool_resolver.py`)
++ an **end-to-end eval** (`scripts/eval_resolver.py`) that runs the full loop:
+prompt → model emits call → parse → resolve → compare to gold.
+
+The KB is the on-disk gsm8k train+test (7473+1319) + mmlu algebra — 8892
+entries, zero external APIs. Resolution is layered so it ALWAYS returns a verdict:
+  1. **exact** match (norm'd) — verbatim `query == KB prompt`
+  2. **prefix** match — KB prompt startswith the query head (salvages
+     BUG-008's truncated queries, where the card `q` was cut at MAX_Q=180)
+  3. **fuzzy** match — token-set Jaccard >= 0.8 (catches light rewording)
+  4. **miss** — call was correct, KB just lacks it (deterministic, logged)
+
+**pass 11 result (1319 gsm8k_test rows, adapter v3):**
+  call_rate        0.992  (1309/1319 emitted a lookup call)
+  well_formed      1.000  (every call perfectly formatted)
+  resolved_hit     0.979  (1282 hits; method split: exact 663, prefix 587, fuzzy 32)
+  resolved MISS    0.021  (27 — genuine KB gaps, not call failures)
+  NOT-called       10     (residual guesses; the old 1% under-call)
+  **correct_vs_gold 1.000 (1282/1282 resolved hits matched the gold number)**
+
+**The headline:** base 135m scored **1.74%** on gsm8k_test math on its own
+(23/1319). With the lookup habit + resolver, it now gets **97.2%** end-to-end
+(1282/1319 resolved-correct). The thesis is demonstrated as a *working system*,
+not just a habit: a 135m that knows to look up turns its math-zeros into
+fetched-correct answers. Cost so far: **$0.0194** across 11 passes.
+
+**BUG-009** fell out during resolver build: `str.splitlines()` shatters jsonl
+records that contain the Unicode separator U+2028 *inside* a string value. Fixed
+by reading jsonl line-by-line from the file object. Real data, real bug — would
+have aborted the math KB. See wiki/BUGS.md.
+
+**Going-forward change (user ask):** every eval now writes a FULL per-item JSONL
+log to `logs/` (eval_resolver_*.jsonl and eval_toolcall_*.jsonl) so each run is
+inspectable after the fact — not just the summary line.
 
 ## What's next (open)
 

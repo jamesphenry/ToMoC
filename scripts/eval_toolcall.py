@@ -172,7 +172,7 @@ def parse_call(text):
     return False, None, None, False
 
 
-def evaluate(engine, cards, verbose=False):
+def evaluate(engine, cards, verbose=False, log_path=None):
     a_cards = [c for c in cards if c["type"] == "A"]
     b_cards = [c for c in cards if c["type"] == "B"]
     stats = {"A_total": len(a_cards), "B_total": len(b_cards),
@@ -184,6 +184,7 @@ def evaluate(engine, cards, verbose=False):
     prompts = [format_prompt(c) for c in all_cards]
     # ONE batched forward pass (was 60 separate calls -> 100% CPU / 12% GPU).
     outputs = engine.generate_all(prompts)
+    log_f = open(log_path, "w") if log_path else None
     for i, (card, out) in enumerate(zip(all_cards, outputs)):
         is_A = card["type"] == "A"
         called, tool, query, wf = parse_call(out)
@@ -199,8 +200,17 @@ def evaluate(engine, cards, verbose=False):
             print(f"[{tag}] called={called} tool={tool} wf={wf}")
             print(f"    Q: {card['q'][:70]}")
             print(f"    -> {out.strip()[:80]!r}\n")
+        if log_f:
+            log_f.write(json.dumps({
+                "i": i, "type": "A" if is_A else "B",
+                "q": card.get("q"), "raw_output": out.strip(),
+                "called": called, "tool": tool, "query": query,
+                "well_formed": wf,
+            }, ensure_ascii=False) + "\n")
         if (i + 1) % 10 == 0 or (i + 1) == total:
             print(f"  ... {i+1}/{total} cards scored", flush=True)
+    if log_f:
+        log_f.close()
 
     metrics = {}
     if stats["A_total"]:
@@ -224,13 +234,20 @@ def main():
     print(f"eval_toolcall: model={args.model} cards={len(cards)}")
     t0 = time.time()
     engine = Engine(args.model)
-    metrics, stats = evaluate(engine, cards, verbose=args.verbose)
+    # full per-item log for every run (user ask: log the full output going forward)
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    log_path = os.path.join(ROOT, "logs", f"eval_toolcall_{stamp}.jsonl")
+    os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
+    metrics, stats = evaluate(engine, cards, verbose=args.verbose,
+                              log_path=log_path)
     wall = time.time() - t0
 
     print("\n=== results ===")
     for k, v in metrics.items():
         print(f"  {k}: {v:.3f}")
     print(f"  walltime_s: {wall:.1f}")
+    print(f"  full log: {log_path}")
 
     # persist to passdb
     db = PassDB()

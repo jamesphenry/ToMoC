@@ -150,6 +150,29 @@
 - **Verified**: parser fix re-scored (pass 8: well_formed 0.964); mk_A cap verified
   strict (≤180) across query lengths; v3 training launched on capped data.
 
+## BUG-009 — jsonl KB loader shattered by Unicode line separators (U+2028)
+- **Symptom**: `scripts/tool_resolver.py` `load_kb()` raised
+  `json.decoder.JSONDecodeError: Unterminated string` on gsm8k_train.jsonl
+  line 2382 (record "Clive opens a box full of different colored balls..."),
+  even though every line parsed fine when read line-by-line from the file.
+- **Root cause**: the loader did `text = open(...).read()` then
+  `text.splitlines()`. `str.splitlines()` splits on MANY boundaries — not just
+  `\n`, but also Unicode line/paragraph separators U+2028 and U+2029, which
+  can legitimately appear INSIDE a JSON string value. So a perfectly valid
+  record containing U+2028 got chopped into two "lines," the second of which
+  was an unterminated fragment → JSONDecodeError. (The earlier per-line check
+  used the file iterator, which only breaks on real `\n`, so it saw no error —
+  that's why the two checks disagreed.)
+- **Fix**: read `.jsonl` line-by-line from the FILE OBJECT (the iterator only
+  breaks on real newlines, never on in-string U+2028). Genuinely broken lines
+  are now caught individually and skipped + counted (data-hygiene) instead of
+  aborting the whole KB. `.json` wrapped files keep `json.loads(fh.read())`.
+- **Caught**: standalone `tool_resolver.py --stats` smoke test before any GPU
+  run. Real data, real bug — would have silently dropped/aborted the math KB.
+- **Lesson**: never `splitlines()` JSONL you didn't author. Use the file
+  iterator (or a JSONL reader) so in-string Unicode separators can't shatter
+  a record. `textwrap`/`splitlines` family is for display text, not records.
+
 ---
 
 ## How to add a bug
