@@ -80,26 +80,67 @@ def main():
     correct = 0
     total = 0
     t0 = time.time()
+    # full per-item log for every run (user ask: log full output going forward)
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    log_path = os.path.join(ROOT, "logs", f"eval_gsm8k_hf_{stamp}.jsonl")
+    os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
+    log_f = open(log_path, "w")
     for i in range(0, len(rows), args.batch):
         chunk = rows[i:i + args.batch]
         prompts = [build_prompt(eng, r) for r in chunk]
         outs = eng.generate_all(prompts)
         for r, o in zip(chunk, outs):
             total += 1
-            correct += int(score_row(r, o))
+            ok = score_row(r, o)
+            correct += int(ok)
+            log_f.write(json.dumps({
+                "i": total - 1, "prompt": r.get("prompt"),
+                "expected": r.get("expected"), "raw_output": o.strip(),
+                "correct": ok,
+            }, ensure_ascii=False) + "\n")
         acc = correct / total if total else 0
         print(f"  {total}/{len(rows)}  acc={acc:.3f}  "
               f"{time.time() - t0:.1f}s", flush=True)
+    log_f.close()
+
+    wall = time.time() - t0
+    # capture GPU mem if on cuda (mirrors other eval scripts)
+    gpu_mb = None
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_mb = round(torch.cuda.max_memory_allocated() / 1e6, 1)
+    except Exception:
+        pass
 
     acc = correct / total if total else 0
     print(f"\n=== RESULT: acc={acc:.4f} ({correct}/{total}) "
-          f"wall={time.time() - t0:.1f}s ===")
+          f"wall={wall:.1f}s ===")
+    print(f"  full log: {log_path}")
     if args.out:
         with open(args.out, "w") as f:
             json.dump({"model": args.model, "rows": total,
                        "correct": correct, "acc": acc,
-                       "wall_s": round(time.time() - t0, 1)}, f, indent=2)
+                       "wall_s": round(wall, 1)}, f, indent=2)
         print(f"  wrote {args.out}")
+
+    # persist to passdb so EVERY GPU run tracks cost (sovereignty metric)
+    try:
+        from passdb import PassDB
+        db = PassDB()
+        pid = db.new_pass(base_model=args.model, num_cards=total,
+                          a_ratio=1.0, walltime_s=round(wall, 1),
+                          gpu_mem_used_mb=gpu_mb, status="gsm8k-bench")
+        db.log_metric(pid, "acc", round(acc, 4))
+        db.log_meta(pid, "run_type", "adapter" if os.path.isdir(args.model) else "base")
+        db.log_meta(pid, "data", os.path.basename(args.data))
+        db.log_meta(pid, "log", log_path)
+        db.summarize(pid)
+        db.cost_report()
+        db.close()
+    except Exception as e:
+        print(f"  [passdb skipped] {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
