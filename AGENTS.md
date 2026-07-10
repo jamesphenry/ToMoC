@@ -2,7 +2,8 @@
 
 > Read this first if you are a new/continued coding session. It is a
 > resume-point, not a spec. The living journal is `wiki/JOURNAL.md`; bugs in
-> `wiki/BUGS.md`; future ideas in `future.md`.
+> `wiki/BUGS.md`; future ideas in `future.md`; **per-run cost breakdown in
+> `runs.md`**.
 
 ## What this project is
 Teach a *tiny* LLM (smollm-135m-instruct, fp16) to **look things up via a tool
