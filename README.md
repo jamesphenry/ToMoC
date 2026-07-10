@@ -74,6 +74,13 @@ qwen2.5:1.5b is the notable control: it scores well AND supports Ollama tools
 natively (smolLM doesn't) — useful as a comparison for whether our LoRA
 adapter matches native behavior.
 
+> 🏆 **Headline result (smolLM:135m + LoRA v3 + sovereign KB resolver):**
+> on gsm8k_test math, the base model solves **1.74%** on its own. With the
+> lookup habit + `tool_resolver.py` (8892 on-disk entries, zero external APIs)
+> it resolves **97.2% correct** end-to-end (call_rate 0.992, well_formed 1.000).
+> "Functions ARE its knowledge" is now a working loop, not a slogan.
+> Details + per-pass cost in [runs.md](runs.md) and [wiki/JOURNAL.md](wiki/JOURNAL.md).
+
 ## Why smollm:135m is the pick
 Not the smartest — deliberately. The mission wants a model that REASONS well
 and leans on functions for knowledge, not one that already knows everything.
