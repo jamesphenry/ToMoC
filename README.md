@@ -1,5 +1,5 @@
-> ## 🔌 Sovereign compute cost so far: **$0.0161**
-> 10 training/eval passes · 1.28 GPU-hrs · 14¢/kWh · ~90W over server idle
+> ## 🔌 Sovereign compute cost so far: **$0.0196**
+> 13 training/eval passes · 1.55 GPU-hrs · 14¢/kWh · ~90W over server idle
 > Refresh live: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 > _Sovereign intelligence is cheap — this whole lab cost less than 2 cents of electricity._
 ---
@@ -11,8 +11,8 @@
 > function with the right argument. The functions ARE its knowledge.
 > Everything here is experimental, fast-and-loose, villain-coded.
 
-> 🔌 **Total electricity cost so far: $0.0161** across 10 training/eval passes
-> (1.28 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
+> 🔌 **Total electricity cost so far: $0.0196** across 13 training/eval passes
+> (1.55 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
 > Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 
 ## The thesis
@@ -144,15 +144,19 @@ bugs and hotfixes in [wiki/BUGS.md](wiki/BUGS.md).
 - [x] **Phase 1 — habit pipeline (DONE)**: flashcard generator + 60-card smoke
   set (50/50 A:B, diverse); `passdb.py` metrics store; `eval_toolcall.py` console
   harness; **baseline pass 1** logged (0% call / 0% over-call floor, 63s/60 cards).
-- [ ] **Phase 2 — first real adapter (NOW)**: `train_adapter.py` trains a LoRA on
-  smolLM:135m from the flashcards; produce pass 2; watch `call_rate_when_should`
-  climb above 0 while `over_call_rate` stays low. (The core proof of the thesis.)
-- [ ] **Phase 3 — scale + tune balance**: bump `A_RATIO` / synthesize more Type B
-  cards; sweep epochs/lr/r to maximize call-rate without over-calling.
-- [ ] **Phase 4 — proper JSON tool calling**: switch output to JSON + constrained
-  decoding (GBNF/grammar) so calls are always valid. Habit transfers from mini-format.
+- [x] **Phase 2 — first real adapter (DONE)**: `train_adapter.py` trains a LoRA on
+  smolLM:135m from the flashcards; passes 2-4; `call_rate_when_should` climbs to
+  ~0.93 while `over_call_rate` stays low. (Core proof of the thesis.)
+- [x] **Phase 3 — scale + tune balance (DONE)**: synthesize 827 capped cards
+  (MAX_Q=180 to fix BUG-008 truncation), sweep epochs/lr/r; **adapter v3 = 0.970
+  call_rate_when_should + 0.970 well_formed + 1.000 correct_tool + 0.027 over_call.**
+- [x] **Phase 4 — resolver (DIRECTION B, DONE)**: `tool_resolver.py` (sovereign KB,
+  8892 entries, exact→prefix→fuzzy→miss) + `eval_resolver.py` end-to-end loop.
+  **gsm8k_test: base 1.74% → 97.2% resolved-correct** (call_rate 0.992, well_formed 1.000).
+  See [wiki/JOURNAL.md](wiki/JOURNAL.md) + [runs.md](runs.md).
 - [ ] **Phase 5 — second tool (`calculate`/`run_code`)**: use 135m's 100% coding
-  strength for math via execution; ToMoC grows to 2 experts.
+  strength for math via sandboxed execution; ToMoC grows to 2 experts.
+  (`run_code` plugs into `tool_resolver.resolve()`'s dispatch seam.)
 - [ ] **Phase 6 — LLM-wiki + tooling framework**: disk-backed wiki as the lookup
   source; orchestration layer (pi/hermes/opencode-shaped) dispatches ToMoC calls.
 - [ ] **Phase 7 — correct-and-update-KB**: feed verified facts; model updates its
@@ -169,7 +173,10 @@ sovereignty). Speculative decoding = speed-only, optional later.
 - [x] benchmark smolLM sizes (llm_eval) — 135m selected as LoRA base
 - [x] flashcard generator (scripts/build_flashcards.py) + v1 smoke set
       (data/raw/flashcards.jsonl, 60 cards, 50/50 A:B, diverse)
-- [x] passdb metrics store (scripts/passdb.py) — logs every training/eval pass
-- [ ] LoRA training script in scripts/ (train_adapter.py)
-- [ ] evaluate adapter via scripts/eval_toolcall.py (uses passdb)
-- [ ] baseline (base model, no adapter) eval pass for comparison
+- [x] passdb metrics store (scripts/passdb.py) — logs EVERY training/eval pass
+      (incl. eval_gsm8k_hf — cost-tracking closed, pass 12/13)
+- [x] LoRA training script (scripts/train_adapter.py) — v3 = milestone adapter
+- [x] adapter eval via scripts/eval_toolcall.py (uses passdb, full per-item JSONL log)
+- [x] baseline (base model) eval + gsm8k benchmark (scripts/eval_gsm8k_hf.py)
+- [x] DIRECTION B resolver (scripts/tool_resolver.py + eval_resolver.py):
+      end-to-end lookup resolves gsm8k_test at 97.2% (base was 1.74%)
