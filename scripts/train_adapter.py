@@ -80,11 +80,17 @@ class FlashcardDataset(Dataset):
             if a is None:
                 # Type B with no gold answer (coding/summarization): skip train target
                 continue
-            prompt = (
-                "If you are not certain of the answer, call the lookup tool "
-                "instead of guessing.\n"
-                f"Question: {q}\nAnswer or call a tool:\n"
-            )
+            if c.get("type") == "D":
+                # two-turn card: prompt_full already carries the full
+                # <cue>Question..Tool result: X\nFinal answer: context; the
+                # model is supervised to emit ONLY the final answer `a`.
+                prompt = c["prompt_full"]
+            else:
+                prompt = (
+                    "If you are not certain of the answer, call the lookup tool "
+                    "instead of guessing.\n"
+                    f"Question: {q}\nAnswer or call a tool:\n"
+                )
             self.rows.append((prompt, a.strip()))
 
     def __len__(self):

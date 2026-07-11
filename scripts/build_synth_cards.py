@@ -246,6 +246,73 @@ def load_run_code(n, seed=0):
 
 
 # --------------------------------------------------------------------------
+# Type D (two-turn) cards — Phase 6b: teach the CLOSING half of the loop.
+# The model already learns turn-1 (emit a TOOL call). Phase 6 measured that at
+# turn-2 — given the tool result fed back — v6 emits an EMPTY answer ~44% of the
+# time (it was never trained on the `Tool result: X\nFinal answer:` format).
+# A Type-D card supervises exactly that continuation: its `prompt_full` is the
+# BYTE-IDENTICAL two-turn context orchestrate.build_turn2_prompt() produces at
+# inference, and its target `a` is just the final answer. Loss lands only on the
+# answer (the prompt — incl. the injected "Tool result:" — is masked), so the
+# model learns to ECHO the result, NOT to hallucinate its own tool output.
+# --------------------------------------------------------------------------
+# Priming cue — MUST stay byte-identical to train_adapter.format/eval/orchestrate.
+_CUE = ("If you are not certain of the answer, call the lookup tool "
+        "instead of guessing.\n")
+
+
+def _two_turn_prompt(q, call, result):
+    """Reconstruct orchestrate.build_turn2_prompt() output byte-for-byte:
+      <cue>Question: {q}\nAnswer or call a tool:\n<call>\nTool result: <r>\nFinal answer:
+    """
+    t1 = _CUE + f"Question: {q}\nAnswer or call a tool:\n"
+    return f"{t1}{call.strip()}\nTool result: {result}\nFinal answer:"
+
+
+def mk_D(q, call, result, answer, src="synth.twoturn"):
+    """Build a Type D (two-turn) card. Target is the bare final answer so loss
+    focuses on the turn-2 continuation (echo the tool result)."""
+    return {"type": "D", "src": src, "q": q,
+            "prompt_full": _two_turn_prompt(q, call, result),
+            "a": str(answer), "answer": str(answer)}
+
+
+def load_two_turn(n_runcode, n_lookup, seed=0):
+    """Type-D cards for BOTH tools (the empty-turn-2 gap hit run_code AND lookup):
+      - run_code: reuse the clean synth arithmetic; call=run_code, result=answer.
+      - lookup:   gsm8k_train questions; call=lookup, result=gold expected number.
+    Same-question overlap with Type C/A is intentional and NON-contradictory —
+    the D prompt carries the tool-result context, so the target differs by design
+    (reinforces the full trajectory rather than competing with turn-1).
+    """
+    cards = []
+    # run_code two-turn (offset seed so we don't just clone the C set verbatim)
+    for q, code, ans in gen_arith(seed=seed + 1000, n=n_runcode):
+        cards.append(mk_D(q, f'TOOL run_code code="{code}"', ans, ans,
+                          src="synth.twoturn.runcode"))
+    # lookup two-turn from gsm8k_train (result = gold answer -> teach echo)
+    added = 0
+    with open(GSM_TRAIN) as f:
+        for line in f:
+            if added >= n_lookup:
+                break
+            r = json.loads(line)
+            q = (r.get("prompt") or r.get("question") or "").strip()
+            expected = r.get("expected")
+            if not q or expected in (None, ""):
+                continue
+            # match mk_A truncation so the emitted query is consistent
+            qq = q
+            if len(qq) > MAX_Q:
+                qq = qq[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
+            ans = str(expected).strip()
+            cards.append(mk_D(qq, f'TOOL lookup query="{qq}"', ans, ans,
+                              src="synth.twoturn.lookup"))
+            added += 1
+    return cards
+
+
+# --------------------------------------------------------------------------
 # assemble
 # --------------------------------------------------------------------------
 def main():
@@ -260,17 +327,27 @@ def main():
                     help="how many synthetic run_code (Type C) cards to add")
     ap.add_argument("--c-seed", type=int, default=0,
                     help="deterministic seed for the synthetic arithmetic")
+    ap.add_argument("--d", type=int, default=0,
+                    help="how many Type-D two-turn (final-answer) cards to add "
+                         "[Phase 6b: closes the empty-turn-2 gap]")
+    ap.add_argument("--d-runcode", type=int, default=150,
+                    help="of --d, how many are run_code two-turn (rest: lookup)")
+    ap.add_argument("--d-seed", type=int, default=0,
+                    help="deterministic seed for the synthetic two-turn arithmetic")
     args = ap.parse_args()
 
     a_gsm = load_gsm(args.gsm)
     a_eval, b_eval = load_from_eval()
     c_cards = load_run_code(args.c, seed=args.c_seed)
+    d_cards = load_two_turn(args.d_runcode, max(0, args.d - args.d_runcode),
+                            seed=args.d_seed) if args.d else []
 
     A = a_gsm + a_eval
     B = b_eval[:args.b_cap]
     C = c_cards
+    D = d_cards
 
-    cards = A + B + C
+    cards = A + B + C + D
     with open(args.out, "w") as f:
         for c in cards:
             f.write(json.dumps(c) + "\n")
@@ -280,6 +357,10 @@ def main():
     print(f"  Type A (lookup): {len(A)}  [gsm8k={len(a_gsm)} eval-wrong={len(a_eval)}]")
     print(f"  Type B (answer): {len(B)}  [eval-right capped at {args.b_cap}]")
     print(f"  Type C (run_code): {len(C)}  [synth.arith seed={args.c_seed}]")
+    print(f"  Type D (two-turn): {len(D)}  [run_code="
+          f"{sum(1 for x in D if 'runcode' in x.get('src',''))} "
+          f"lookup={sum(1 for x in D if 'lookup' in x.get('src',''))} "
+          f"seed={args.d_seed}]")
     print("  A:B:C ratio =",
           round(len(A) / max(1, len(B)), 2), ":",
           round(len(B) / max(1, len(B)), 2), ":",

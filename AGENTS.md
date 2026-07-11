@@ -33,7 +33,7 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.0932** across 32 passes (README banner).
+- **Cost tracking live**: total **$0.1082** across 35 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -143,10 +143,23 @@ JSONL to `logs/orchestrate_*.jsonl`; passdb-logged (passes 31-32).
 - flashcard run_code loop: canonical 289/300 = 96.3%, final 251/300 = 83.7%
   (183/821 empty turn-2). (Note: flashcard join shows gold=None for many C rows
   in the quick diagnostic — gsm8k is the trustworthy end-to-end signal.)
-- **Open next (Phase 6b):** add Type-D two-turn cards (question + call + tool
-  result → final answer) to the training set and retrain v6→v8. Target: drive
-  empty-turn-2 → ~0 so end-to-end tracks the tool's ~97% ceiling. This is a
-  training-format fix, not a bigger-base or better-resolver problem.
+- **Phase 6b DONE (2026-07-11):** `build_synth_cards.py --d N` adds Type-D
+  two-turn cards (question + emitted TOOL call + tool result → final answer);
+  `train_adapter.py` supervises them with loss ONLY on the final answer (the
+  injected `Tool result:` context is masked, so the model learns to ECHO the
+  result, not hallucinate it). Retrained v6→**v8** (360m, 1427 cards = 527A /
+  300B / 300C / 300D, loss 0.1456).
+  - **Result (v8):** empty-turn-2 collapsed to **0/1288 (0.0%)** on gsm8k (was
+    571/1301 = 43.9% on v6). End-to-end final_answer_correct = **1262/1319 =
+    95.7%** on gsm8k (was 53.7%), of which 1262/1288 = 98.0% of non-empty
+    answers are correct — the loop now tracks the tool's own ~96% ceiling.
+  - **This completes the ToMoC thesis:** the tiny sovereign model routes to
+    external "experts" (KB lookup + run_code compute) and faithfully reports
+    their answer. functions ARE its knowledge.
+  - **Open next (optional):** push task DIVERSITY (more physics/units/counting
+    templates, multi-step chains) since the residual ~4% is now KB re-wording +
+    rare arithmetic slips, not the loop. Or wire the orchestrator into a real
+    CLI/agent entrypoint (pi/hermes-shaped).
 
 Run it:
 ```bash

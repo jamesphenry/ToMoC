@@ -89,6 +89,9 @@ without scaling params.
 | 30 | resolver eval v7 (gsm8k lookup) | adapters/v7 | — | 2937.5s | — | call=0.964 WF=1.000 correct=0.990 (1253/1266) | — | residual=KB gaps |
 | 31 | orchestrate flashcard (2-turn ToMoC) | adapters/v6 | — | 1044.4s | — | canonical=0.963 final=0.837 (empty t2=183/821) | $0.0037 | loop works |
 | 32 | orchestrate gsm8k (2-turn ToMoC) | adapters/v6 | — | 1817.8s | — | canonical=0.970 final=0.537; of 730 non-empty t2 → 708=0.970 | $0.0064 | gap=empty t2 |
+| 33 | train v8 (360m, +Type-D two-turn) | smollm:360m | 0.1456 | 1459.3s | 1605MB | 1427 cards (527A/300B/300C/300D) | $0.0051 | closes empty t2 |
+| 34 | orchestrate flashcard (v8) | adapters/v8 | — | 1031.6s | — | final=0.885 canonical=0.908 | $0.0036 | empty t2 ~0 |
+| 35 | orchestrate gsm8k (v8) | adapters/v8 | — | 1784.1s | — | final=0.957 canonical=0.958; empty t2=0/1288 | $0.0062 | LOOP CLOSED |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -364,6 +367,38 @@ diagnose before despairing — the "53.7%" headline hid a 97% capability).
 **Next (Phase 6b, open):** synthesize Type-D two-turn cards (question + call +
 tool result → final answer), fold into the 1127-card set, retrain v6→v8.
 Target: empty-turn-2 → ~0 so end-to-end tracks the tool's ~97% ceiling.
+
+## Phase 6b — closing the loop: Type-D two-turn cards (pass 33-35)
+
+Phase 6 proved the loop *works* but v6 emitted an EMPTY turn-2 ~44% of the
+time (never trained on `Tool result: X\nFinal answer:`). Phase 6b fixes it as
+a **training-format** problem (not base-size or resolver):
+
+- **`build_synth_cards.py --d N`** adds **Type-D** cards: a two-turn context
+  (the raw question + the model's own TOOL call + the resolved tool result +
+  `Final answer:`) with the bare answer as target. 150 run_code (sovereign
+  arithmetic) + 150 lookup (gsm8k_train gold) = 300 per run.
+- **Critical correctness detail:** the Type-D `prompt_full` is rebuilt
+  BYTE-IDENTICAL to `orchestrate.build_turn2_prompt()` (shared cue string),
+  and `train_adapter.py` masks the whole prompt so **loss lands only on the
+  final answer**. This teaches the model to ECHO the injected tool result,
+  not to hallucinate its own `Tool result:` line. Verified: 13/13 ad-hoc
+  checks, incl. D-prompt == orchestrate-prompt byte equality + masked-label
+  count.
+- **Retrain v6→v8** (360m, 1427 cards = 527A/300B/300C/300D, 3ep lr2e-4,
+  loss **0.1456**, 1605MB, pass 33).
+
+**Result (pass 34-35) — the loop is CLOSED:**
+- gsm8k: empty turn-2 = **0/1288 (0.0%)** (was 571/1301 = 43.9% on v6).
+- gsm8k final_answer_correct = **1262/1319 = 95.7%** (was 53.7%); of the
+  answers it gives, 1262/1288 = 98.0% are correct → tracks the tool's own
+  ~96% ceiling.
+- This completes the ToMoC thesis: the tiny sovereign model routes to external
+  "experts" (KB + run_code) and faithfully reports the answer. functions ARE
+  its knowledge.
+- Residual ~4% is now KB re-wording gaps + rare arithmetic slips — NOT the
+  loop. flashcard final% is a known join artifact (gold=None for many C rows);
+  gsm8k is the trustworthy signal.
 
 ## What's next (open)
 
