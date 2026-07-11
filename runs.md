@@ -39,7 +39,7 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 17 | 05:29 | resolver-eval | adapters/v4 → gsm8k lookup loop | 1319 | — | 932.9 | — | 0.00327 |
 | 18 | 05:57 | train | smollm:135m → v5 (C 150→300, skewed) | 1127 | 0.188 | 581.4 | 1111 | 0.00200 |
 | 19 | 06:05 | resolver-eval | adapters/v5 → run_code end-to-end | 1127 | — | 414.0 | — | 0.00140 |
-| 20 | 06:08 | resolver-eval | adapters/v5 → gsm8k lookup loop | 1319 | — | 927.3 | — | 0.00324 |
+| 20 | 06:28 | resolver-eval | adapters/v5 → gsm8k lookup loop | 1319 | — | 1384.1 | — | 0.00484 |
 | 21 | 06:31 | train | smollm:135m → v5b (C clean/balanced) | 1127 | 0.191 | 1032.9 | 1111 | 0.00361 |
 | 22 | 06:39 | resolver-eval | adapters/v5b → run_code end-to-end | 1127 | — | 420.9 | — | 0.00147 |
 | 23 | 06:55 | resolver-eval | adapters/v5b → gsm8k lookup loop | 1319 | — | 927.3 | — | 0.00324 |
@@ -73,7 +73,7 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 16 | v4 | run_code | flashcards2 C (150, easy, no ÷) | 1.000 | 1.000 | 142 correct | **94.7%** (142/150) |
 | 17 | v4 | lookup | gsm8k_test (1319) | 0.995 | 0.999 | 1269 correct | **98.4%** (1269/1290) |
 | 19 | v5 | run_code | flashcards2 C (300, skewed) | 0.732 | 1.000 | 262 correct | 87.6% (262/299) |
-| 20 | v5 | lookup | gsm8k_test (1319) | 1.000 | 1.000 | 1279 correct | 98.5% (1279/1298) |
+| 20 | v5 | lookup | gsm8k_test (1319) | 0.997 | 1.000 | 1277 correct | 98.5% (1277/1296) |
 | 22 | v5b | run_code | flashcards2 C (300, balanced) | 0.731 | 1.000 | 266 correct | **89.0%** (266/299) |
 | 23 | v5b | lookup | gsm8k_test (1319) | 1.000 | 1.000 | 1279 correct | 98.5% (1279/1298) |
 | 24 | v4 | run_code | SAME 300-card set (fair A/B) | 0.651 | 1.000 | 101 correct | 71.1% (101/142) |

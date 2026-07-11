@@ -76,7 +76,7 @@ without scaling params.
 | 17 | resolver eval v4 (gsm8k lookup loop) | adapters/v4 | — | 932.9s | — | call=0.995 WF=0.999 **resolved-correct=0.984 (1269/1290)** | — | — |
 | 18 | train v5 (C 150→300, skewed dist) | smollm:135m | 0.188 | 581.4s | 1111MB | — | 3ep lr2e-4 b8 | superseded |
 | 19 | resolver eval v5 (flashcard run_code) | adapters/v5 | — | 414.0s | — | call=0.732 WF=1.000 correct=0.876 (262/299) | — | skewed dist hurt |
-| 20 | resolver eval v5 (gsm8k lookup) | adapters/v5 | — | 927.3s | — | call=1.000 WF=1.000 correct=0.985 (1279/1298) | — | lookup preserved |
+| 20 | resolver eval v5 (gsm8k lookup) | adapters/v5 | — | 1384.1s | — | call=0.997 WF=1.000 correct=0.985 (1277/1296) | — | lookup preserved |
 | 21 | train v5b (C clean/balanced) | smollm:135m | 0.191 | 1032.9s | 1111MB | — | 3ep lr2e-4 b8 | **best compute** |
 | 22 | resolver eval v5b (flashcard run_code) | adapters/v5b | — | 420.9s | — | call=0.731 WF=1.000 **correct=0.890 (266/299)** | — | +division |
 | 23 | resolver eval v5b (gsm8k lookup) | adapters/v5b | — | 927.3s | — | call=1.000 WF=1.000 correct=0.985 (1279/1298) | — | lookup preserved |
