@@ -52,7 +52,7 @@ sys.path.insert(0, HERE)
 from eval_toolcall import Engine, format_prompt, parse_call
 from tool_resolver import resolve, KB
 
-DEFAULT_MODEL = os.path.join(ROOT, "adapters", "v6")
+DEFAULT_MODEL = os.path.join(ROOT, "adapters", "v8")
 MAX_NEW = 64          # turn-1 / turn-2 continuation budget
 CHUNK = 16            # batched forward chunk (BUG-007)
 
@@ -144,12 +144,37 @@ def main():
     ap.add_argument("--kind", default="gsm8k",
                     choices=["gsm8k", "mmlu", "flashcard"])
     ap.add_argument("--ask", default=None, help="single live question")
+    ap.add_argument("--chat", action="store_true",
+                    help="interactive REPL: type a question, watch the ToMoC loop")
     ap.add_argument("--max", type=int, default=0, help="cap rows (0=all)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
     kb = KB.get()
     engine = Engine(args.model, max_new_tokens=MAX_NEW)
+
+    if args.chat:
+        try:
+            import readline  # arrow keys + history (no effect on plain pipes)
+        except Exception:
+            pass
+        print(f"smol ToMoC playground — model={args.model}")
+        print("type a question, 'quit'/'exit' to leave. The model will call a "
+              "tool, get the result, then answer.\n")
+        while True:
+            try:
+                q = input("you> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nbye")
+                break
+            if not q:
+                continue
+            if q.lower() in ("quit", "exit", "q"):
+                print("bye")
+                break
+            rec = run_question(engine, kb, q, None, verbose=True)
+            print(f"answer> {rec['final_answer']}\n")
+        return
 
     if args.ask:
         run_question(engine, kb, args.ask, None, verbose=True)

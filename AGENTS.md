@@ -12,7 +12,7 @@ Ollama) — so we teach the habit with a LoRA adapter that emits a mini call
 script: `TOOL lookup query="<question>"`. Thesis: *functions ARE its knowledge*;
 reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 
-## Current state (as of 2026-07-11, after Phase 6 loop — 360m/v6 production base)
+## Current state (as of 2026-07-11, after Phase 6b — v8 closed-loop adapter, 360m)
 - **Best adapters (same 2-tool format, 1127-card clean-balanced set):**
   - `adapters/v7/` — LoRA on **smolLM-1.7B** (hidden 2048, 24 layers).
     **Best compute**: run_code **100% (300/300)** on the hard 300-card set, 0
@@ -156,20 +156,26 @@ JSONL to `logs/orchestrate_*.jsonl`; passdb-logged (passes 31-32).
   - **This completes the ToMoC thesis:** the tiny sovereign model routes to
     external "experts" (KB lookup + run_code compute) and faithfully reports
     their answer. functions ARE its knowledge.
-  - **Open next (optional):** push task DIVERSITY (more physics/units/counting
-    templates, multi-step chains) since the residual ~4% is now KB re-wording +
-    rare arithmetic slips, not the loop. Or wire the orchestrator into a real
-    CLI/agent entrypoint (pi/hermes-shaped).
+  - **Open next:** (a) PLAYGROUND shipped — `python -u scripts/orchestrate.py --chat`
+    is the interactive loop (sovereign HF engine, no Ollama). (b) The capability
+    moonshot is **Phase 7: the LLM-wiki** — replace the static gsm8k KB with a
+    disk-backed wiki the model READS and WRITES (the original Phase 6 open item
+    before we pivoted to the closing loop). That gives it a real, growing
+    memory instead of a frozen 8.9k-entry lookup table. Residual ~4% accuracy
+    is now KB re-wording + rare arithmetic slips, not the loop.
 
 Run it:
 ```bash
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # live single-question ToMoC loop:
-python -u scripts/orchestrate.py --model adapters/v6 --ask "48 - 5 + 20"
+python -u scripts/orchestrate.py --model adapters/v8 --ask "48 - 5 + 20"
+# NEW: interactive playground (no Ollama; sovereign HF engine only) —
+#   type a question, watch turn1 call -> tool result -> final answer:
+python -u scripts/orchestrate.py --chat
 # batched end-to-end final-answer scoring:
-python -u scripts/orchestrate.py --model adapters/v6 \
+python -u scripts/orchestrate.py --model adapters/v8 \
         --data data/raw/flashcards2.jsonl --kind flashcard
-python -u scripts/orchestrate.py --model adapters/v6 \
+python -u scripts/orchestrate.py --model adapters/v8 \
         --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
 ```
 
