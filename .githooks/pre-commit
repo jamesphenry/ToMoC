@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — keep derivable doc fragments in sync with passdb.
+#
+# Runs scripts/sync_docs.py (idempotent: rewrites README banner, AGENTS cost
+# line, runs.md Totals + new per-pass rows from benchmarks/passes.db). Any
+# changed doc files are re-staged so the sync lands in THIS commit.
+#
+# Designed to NEVER block a commit: errors are warned, exit code is always 0.
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VENV="$REPO_ROOT/.venv/bin/activate"
+
+# Only run if the venv + script exist.
+if [ ! -f "$VENV" ] || [ ! -f "$REPO_ROOT/scripts/sync_docs.py" ]; then
+  exit 0
+fi
+
+# shellcheck disable=SC1091
+source "$VENV"
+
+if ! python -u "$REPO_ROOT/scripts/sync_docs.py" 2>&1; then
+  echo "[pre-commit] sync_docs.py reported an error (continuing commit anyway)"
+fi
+
+# Re-stage any doc files the sync touched, so the sync is part of this commit.
+for f in README.md AGENTS.md runs.md; do
+  if [ -f "$REPO_ROOT/$f" ] && ! git diff --quiet -- "$f"; then
+    echo "[pre-commit] re-staging synced $f"
+    git add -- "$f"
+  fi
+done
+
+exit 0
