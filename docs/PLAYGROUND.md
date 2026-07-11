@@ -1,0 +1,112 @@
+# Playground — `scripts/orchestrate.py --chat`
+
+An interactive, sovereign ToMoC loop you can actually talk to. No Ollama, no
+external APIs — it drives the same 360m `v8` LoRA + HF engine + local KB that
+the batch scorers use, just one question at a time, with the live "watch it
+think" view.
+
+The model (q) → emits a `TOOL` call → the resolver computes/runs it → the
+result is fed back → the model emits a final answer. `--chat` shows every step.
+
+## Run it
+
+```bash
+cd /home/aec/smol
+source .venv/bin/activate
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+python -u scripts/orchestrate.py --chat
+```
+
+> `--model` defaults to `adapters/v8` (the closed-loop production adapter).
+> Override with `--model adapters/v6` etc. if you want to compare.
+
+## What you see
+
+For each question the loop prints:
+
+```
+you> A baker made 3 trays of 12 cookies each. How many cookies?
+Q: A baker made 3 trays of 12 cookies each. How many cookies?
+  turn1: TOOL run_code code="3 * 12"
+  tool=run_code query='3 * 12' verdict=hit
+  result fed back: 36
+  turn2 final: 36
+  gold=None  final_correct=None  canonical_correct=None
+answer> 36
+```
+
+- `turn1` — the raw call the model emitted (`TOOL lookup query="..."` or
+  `TOOL run_code code="..."`).
+- `verdict` — `hit` (resolver found an answer / ran the code) or a miss.
+- `result fed back` — what was injected before turn 2.
+- `answer>` — the model's final answer (echoes the tool result when it's right).
+
+## Commands (inside the chat)
+
+| command | what it does |
+|---------|--------------|
+| `quit` / `exit` / `q` | leave; auto-saves the session (see below) |
+| `/export [path]` | write the whole conversation as markdown. Defaults to `logs/chat_export.md`. Pass a path to choose your own (e.g. `/export /tmp/session1.md`). |
+| `/mark <n> <seen|fixed>` | flip turn `n`'s review status tag. Used for the share-and-review handoff. |
+
+Empty input is ignored. Anything else is treated as a question.
+
+## Exporting a conversation for review
+
+`/export` writes a markdown file, one `## Turn N` block per exchange:
+
+```markdown
+# smol ToMoC conversation
+
+- model: `.../adapters/v8`
+- exported: 2026-07-11 20:06 UTC
+- turns: 2
+
+## Turn 1  _[status: new]_
+
+**You:** A baker made 3 trays of 12 cookies each. How many cookies?
+
+**Model (turn-1 call):** `TOOL run_code code="3 * 12"`
+**Tool:** hit → `36`
+**Final answer:** 36
+
+## Turn 2  _[status: new]_
+
+**You:** 48 - 5 + 20
+...
+```
+
+Each turn carries a `_[status: new]_` tag. Use `/mark 1 fixed` (or just edit
+the file by hand) to flip it to `seen` or `fixed`. The footer tells the
+reviewer to do exactly that.
+
+**Share-and-review loop:**
+
+1. Chat → `/export /tmp/session1.md`
+2. Hand the file to the assistant (paste it back, or point at the path).
+3. The assistant marks turns `seen` / `fixed` and tells you what to correct.
+4. Next session, repeat.
+
+On `quit`, the session is **auto-saved** to `logs/chat_last.md` so nothing is
+lost even if you forget `/export`.
+
+## How it works (for the curious)
+
+`--chat` reuses the exact same code path as the batch scorer:
+
+- `run_question(engine, kb, q, gold=None, verbose=True)` — the two-turn loop:
+  turn 1 emit the call, resolve via `tool_resolver.resolve()`, turn 2 feed the
+  result back and emit the final answer.
+- `KB.get()` loads the sovereign lookup table; `run_code` queries go through
+  `scripts/sandbox.py` (restricted executor).
+- The transcript is just an in-memory list of dicts, rendered to markdown by
+  `render_md()` when you `/export` or quit.
+
+The playground is a thin REPL over the verified orchestration loop — it adds
+no model behavior, it only makes the existing ToMoC loop talkable.
+
+## Related
+
+- Batch end-to-end scoring: `python -u scripts/orchestrate.py --data <jsonl> --kind gsm8k`
+- Single live question (no REPL): `python -u scripts/orchestrate.py --ask "48 - 5 + 20"`
+- Build/loop background: [wiki/JOURNAL.md](../wiki/JOURNAL.md) (Phase 6 / 6b).

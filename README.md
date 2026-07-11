@@ -156,6 +156,7 @@ Phased, KISS, baby-steps. Each phase ends with a passdb entry so we can compare.
 Detailed parked ideas live in [future.md](future.md).
 The build journey, real numbers, and lessons live in [wiki/JOURNAL.md](wiki/JOURNAL.md);
 bugs and hotfixes in [wiki/BUGS.md](wiki/BUGS.md).
+How-to for the interactive loop: [docs/PLAYGROUND.md](docs/PLAYGROUND.md).
 
 - [x] **Phase 0 — foundations (DONE)**: P4 env verified; smolLM sizes benchmarked
   via llm_eval; smolLM:135m picked as LoRA base; vision + ToMoC documented.
