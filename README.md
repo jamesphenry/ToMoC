@@ -1,19 +1,35 @@
-> ## 🔌 Sovereign compute cost so far: **$0.1082**
-> 35 training/eval passes · 8.59 GPU-hrs · 14¢/kWh · ~90W over server idle
+> ## 🔌 Sovereign compute cost so far: **$0.1170**
+> 37 training/eval passes · 9.29 GPU-hrs · 14¢/kWh · ~90W over server idle
 > Refresh live: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
-> _Sovereign intelligence is cheap — this whole lab (35 passes: 5 adapters, 3 base sizes, the full two-tool ToMoC loop closed end-to-end) cost about a dime of electricity._
+> _Sovereign intelligence is cheap — this whole lab (37 passes: 6 adapters, 3 base sizes, the full two-tool ToMoC loop closed end-to-end) cost about a dime of electricity._
 ---
 
 # smol-lab
 
 > Mission: a *very small* LLM that knows how to LOOK UP what it needs to know.
 > It doesn't have to be smart — it has to REASON well enough to call the right
-> function with the right argument. The functions ARE its knowledge.
+> function with the right argument. The functions ARE its knowledge. The router
+> owns the *decision of where knowledge lives* — not the knowledge itself.
 > Everything here is experimental, fast-and-loose, villain-coded.
 
-> 🔌 **Total electricity cost so far: $0.0566** across 27 training/eval passes
-> (4.49 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
-> Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
+## A note on how this was built
+
+This is a **learning exercise**, not a product. The goal is to understand a
+specific architecture — a tiny sovereign model that routes to external
+capabilities instead of memorizing — by building it, breaking it, and
+documenting the pain points. Everything here is a step toward eventually
+building a model *from scratch* (own tokenizer, corpus, pretraining) once the
+concept and the failure modes are fully understood.
+
+Large parts of this repo were built **with AI assistance** (an agent pair-coding
+the training scripts, evaluators, and docs alongside me). The AI writes code; I
+make the decisions, run the experiments, and own the results. That's the point:
+to make something genuinely interesting out of a very small model and a cheap
+GPU, and to learn the stack from the ground up while doing it.
+
+If you're reading this: the bugs, the wrong turns, and the negative results are
+intentional parts of the lab, not accidents to hide. See
+[wiki/BUGS.md](wiki/BUGS.md) and [wiki/JOURNAL.md](wiki/JOURNAL.md).
 
 ## The thesis
 A small model can't store much. So instead of memorizing facts, it learns to
@@ -184,11 +200,21 @@ How-to for the interactive loop: [docs/PLAYGROUND.md](docs/PLAYGROUND.md).
   on gsm8k_test (call_rate 0.995). `eval_toolcall.py` / `eval_resolver.py`
   extended to score Type-C. `run_code` plugs into `tool_resolver.resolve()`'s
   dispatch seam.
-- [ ] **Phase 6 — LLM-wiki + tooling framework**: disk-backed wiki as the lookup
+- [x] **Phase 6b — closing loop + honesty (DONE)**: v8 closed the empty-turn-2
+  gap (Type-D two-turn cards, loss-masked) → 95.7% gsm8k end-to-end. v9 added
+  Type-E (graceful KB-miss honesty — stop guessing numbers on a miss). v10 adds
+  Type-F (show-your-work: emit reasoning, then the `run_code` call) to attack the
+  residual NL→code semantic-parsing error. 360m stays the locked-in production
+  base. Architecture + philosophy documented in [wiki/TOMOC.md](wiki/TOMOC.md).
+- [ ] **Phase 6c — router-quality metrics (IN PROGRESS)**: eval_resolver now
+  reports router precision/recall/false-tool/wrong-tool (gold-labeled on
+  flashcards; heuristic on gsm8k) — *which expert did it pick*, not just *did it
+  call*.
+- [ ] **Phase 7 — LLM-wiki + tooling framework**: disk-backed wiki as the lookup
   source; orchestration layer (pi/hermes/opencode-shaped) dispatches ToMoC calls.
-- [ ] **Phase 7 — correct-and-update-KB**: feed verified facts; model updates its
+- [ ] **Phase 8 — correct-and-update-KB**: feed verified facts; model updates its
   disk-backed KB (not weights) behind a verification gate.
-- [ ] **Phase 8 — endgame**: reasoning scratchpad self-corrects calls; retrain from
+- [ ] **Phase 9 — endgame**: reasoning scratchpad self-corrects calls; retrain from
   100%-own data (full sovereignty). "Functions ARE its knowledge" as architecture.
 
 REJECTED / parked: distillation (needs external teacher → breaks homelab

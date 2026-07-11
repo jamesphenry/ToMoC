@@ -92,6 +92,21 @@ cheap, VRAM isn't." Functions are knowledge.
   -> Embodies "disks cheap, VRAM isn't": knowledge lives on disk, fix it there.
   -> Implies the KB needs a write path (not just lookup), plus a verification
   gate so bad corrections don't poison it. Post-v1, post-tooling-framework.
+- FLAG-TO-DATASET (user idea, 2026-07-11 — human-in-the-loop correction loop):
+  When the model gets something wrong (or is unsure), instead of it auto-writing
+  the KB, the USER tells the model something like "flag that" so it can be
+  reviewed. The human then goes in and CREATES A TRAINING DATASET ENTRY teaching
+  the correct response (e.g. a Type-F "show your work" card: problem + the right
+  operation + correct code/answer). That card is folded into the next retrain.
+  -> Key distinction from plain CORRECT-AND-UPDATE-KB: the correction is expressed
+     as SUPERVISED TRAINING DATA the human authors, not an autonomous KB write.
+     The model doesn't correct itself — it surfaces the failure, the human
+     authors the fix, retraining installs it. Keeps the human as the verifier
+     (sovereignty + no poisoned-KB risk) while still closing the loop.
+  -> Natural pairing: the playground "flag" could tag a turn (like the existing
+     /mark seen|fixed on chat exports) and emit a stub card (Q + placeholder
+     WORK/CODE/A) for the human to fill in. Feeds directly into the f_cards
+     format used for Type-F reasoning training. Post-v9, post-Type-F feasibility.
 - BUILD FROM SCRATCH (end-state ambition): after this experiment, user wants to
   create everything from scratch with 100%-own data (tokenizer, corpus, training
   set) — full sovereignty, no borrowed base. Long-term; v1 still uses smolLM:135m

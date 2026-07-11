@@ -12,8 +12,8 @@ Ollama) — so we teach the habit with a LoRA adapter that emits a mini call
 script: `TOOL lookup query="<question>"`. Thesis: *functions ARE its knowledge*;
 reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 
-## Current state (as of 2026-07-11, after Phase 6b — v8 closed-loop adapter, 360m)
-- **Best adapters (same 2-tool format, 1127-card clean-balanced set):**
+## Current state (as of 2026-07-11, after v10 — Type-F show-work + Type-E honesty, 360m)
+- **Best adapters (same 2-tool format):**
   - `adapters/v7/` — LoRA on **smolLM-1.7B** (hidden 2048, 24 layers).
     **Best compute**: run_code **100% (300/300)** on the hard 300-card set, 0
     misses (incl. division + 2-step). Lookup gsm8k **99.0% (1253/1266)**,
@@ -27,13 +27,23 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
   - `adapters/v4/` — 135m, 2 tools; on the hard 300-card set run_code only
     71.1% (never trained on division). Lookup 98.4%.
   - (v5, skewed sub/mixed dist, 87.6% — superseded by v5b. Don't use.)
-  - Dataset: 1127 cards (527 lookup / 300 answer / 300 run_code).
+  - `adapters/v8/` — 360m, **default production base**. Added Type-D two-turn
+    cards (loss-masked) to close the empty-turn-2 gap → **95.7% gsm8k end-to-end**.
+  - `adapters/v9/` — 360m + **Type-E** (graceful KB-miss honesty: stops guessing
+    numbers on a lookup miss). loss 0.1223.
+  - `adapters/v10/` — 360m + Type-E + **Type-F** (show-your-work: emit reasoning
+    then `run_code`). 1833-card set (527A/300B/300C/300D/300E/106F). Router quality
+    **97.2% precision / 96.8% recall** (gold-labeled flashcard eval); run_code
+    executes correctly when routed; Type-E honesty holds (no guessed numbers).
+    The show-work *prefix* didn't transfer strongly, but routing-to-run_code did.
+  - Dataset: 1833 cards (527 lookup / 300 answer / 300 run_code / 300 two-turn-D /
+    300 KB-miss-E / 106 show-work-F).
 - **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
   around via lookup (~99%) + run_code (100% on v7).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.1082** across 35 passes (README banner).
+- **Cost tracking live**: total **$0.1263** across 38 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -73,19 +83,26 @@ python scripts/eval_gsm8k_hf.py --data ~/llm_eval/datasets/gsm8k_test.jsonl --ba
   slice at full seq len) is required. Don't revert to per-call generate.
 - **BUG-007**: `generate_all` must CHUNK (chunk=16). Batching all 827 in one
   forward OOMs the P4 (7.35GB).
-- **BUG-008**: well_formed was a MEASUREMENT bug — `max_new_tokens=64` truncated
-  long queries before the closing quote, so the strict `CALL_RE` scored correct
-  calls as malformed. Fix = `CALL_OPEN_RE` (open-quote accepted) + training data
-  capped to MAX_Q=180 so the model learns to CLOSE the quote. v2's "0.488" was
-  phantom; v3's 0.970 is real. **Diagnose before fixing.**
+- **BUG-008**: well_formed was a MEASUREMENT bug — `max_new_tokens` (now 160 in
+  `orchestrate.py`, was 64) truncated long queries before the closing quote, so
+  the strict `CALL_RE` scored correct calls as malformed. Fix = `CALL_OPEN_RE`
+  (open-quote accepted) + training data capped to MAX_Q=180 so the model learns
+  to CLOSE the quote. v2's "0.488" was phantom; v3's 0.970 is real. The 160 bump
+  (v10) exists so a show-your-work prefix can precede the TOOL call without
+  truncation — verified no v8/v9 regression (v8@160 = 98.45% correct_vs_gold).
+  **Diagnose before fixing.**
 - The priming cue string in `train_adapter.py` and `eval_toolcall.py` MUST stay
   byte-identical or the call habit won't transfer.
 - `flashcards2.jsonl` is GENERATED (not hand-authored) — regenerate, don't edit.
 - `adapters/`, `models/`, `logs/`, `benchmarks/*.db` are gitignored (artifacts).
 
-## Open next step (PHASE 5 DONE + base-size sweep DONE, 2026-07-11)
+## Open next step (PHASE 6b DONE, v10 trained — 2026-07-11)
 The model now has TWO tools. `lookup` (fetch) and `run_code` (compute) both
-resolve end-to-end. Verified across a 3-way base sweep (135m / 360m / 1.7B):
+resolve end-to-end, with a closed two-turn loop (call → resolve → final answer)
+and graceful KB-miss honesty (Type-E). v10 adds Type-F (show-your-work) on top of
+the v8/v9 stack; gold-labeled flashcard router quality is **97.2% precision /
+96.8% recall** (see `eval_resolver.py --kind flashcard`, new router metrics).
+Verified across a 3-way base sweep (135m / 360m / 1.7B):
 - `lookup`: emits `TOOL lookup query="..."` → sovereign KB resolver
   (`scripts/tool_resolver.py`, 8892 entries, zero external APIs) → **~99%**
   resolved-correct on gsm8k_test at every size (v7 1253/1266 = 99.0%).
@@ -99,14 +116,15 @@ resolve end-to-end. Verified across a 3-way base sweep (135m / 360m / 1.7B):
 Run it:
 ```bash
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# v10 is the current default adapter (360m + Type-E + Type-F)
 # lookup loop on gsm8k (end-to-end):
-python -u scripts/eval_resolver.py --model adapters/v7 \
+python -u scripts/eval_resolver.py --model adapters/v10 \
         --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
-# run_code end-to-end (Type-C cards scored vs gold):
-python -u scripts/eval_resolver.py --model adapters/v7 \
+# flashcard eval with router-quality metrics (gold-labeled A/B/C):
+python -u scripts/eval_resolver.py --model adapters/v10 \
         --data data/raw/flashcards2.jsonl --kind flashcard
 # toolcall habit eval (A/B/C scored):
-python -u scripts/eval_toolcall.py --model adapters/v7 --data data/raw/flashcards2.jsonl
+python -u scripts/eval_toolcall.py --model adapters/v10 --data data/raw/flashcards2.jsonl
 # resolver standalone smoke test (no GPU):
 python scripts/tool_resolver.py --stats
 python scripts/tool_resolver.py --tool run_code "51 + 99"
