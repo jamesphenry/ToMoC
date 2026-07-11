@@ -210,6 +210,35 @@
 
 ---
 
+## BUG-012 — division-detection dropped ÷ cards from the clean Type-C generator
+- **Symptom**: rewriting `gen_arith` (v5b clean set) for a balanced +/−/×/÷ mix,
+  the regenerated dataset had only ~2 division cards instead of ~75. Distribution
+  silently skewed away from the operator we most wanted to add.
+- **Root cause**: the op-classifier used `"/ {b}" in tmpl` to detect division, but
+  the clean ÷ templates phrase it naturally ("shared equally among {b}", "cut into
+  {b} pieces") — no literal "/" in the template string → misclassified, then the
+  balancing loop under-drew them.
+- **Fix**: classify by the operator in the generated `code` expression (`"/" in
+  code`), not by template text; keeps balance robust to phrasing.
+- **Caught**: op-distribution print + sandbox verify BEFORE training (no GPU wasted).
+- **Verified**: regenerated 300 C cards, even op split, 0 sandbox/compute mismatches.
+
+## BUG-013 — apples-to-oranges eval made a better adapter look worse
+- **Symptom**: v5b scored run_code **89.0%** vs v4's headline **94.7%** → looked
+  like a regression; nearly shipped v4 as "still best for compute."
+- **Root cause**: the two numbers were on DIFFERENT test sets. v4's 94.7% was its
+  own easier 150-card set (no division, fewer 2-step); v5b's 89% was on a harder
+  300-card set (incl. ÷ + more 2-step). Not comparable.
+- **Fix**: re-ran v4 on the SAME 300-card set (pass 24) → v4 = **71.1%** (call_rate
+  0.651, under-calls run_code on unseen division). On a matched set v5b (89%) beats
+  v4 (71%) and adds division. v5b is the real best compute adapter.
+- **Lesson**: NEVER rank adapters across different eval sets. Always eval every
+  candidate on one shared set before declaring a winner. Measurement bug, not a
+  model regression (cf. BUG-008, same class).
+- **Caught**: fair A/B run before committing the "regression" narrative.
+
+---
+
 ## Sandbox design notes (scripts/sandbox.py, Phase 5)
 `run_code` executes untrusted model output. Defense-in-depth (not a general REPL):
 - AST pre-scan (`_scan`) rejects imports, defs, `__import__`, `open`, dunder

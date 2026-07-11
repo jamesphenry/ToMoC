@@ -6,12 +6,12 @@
 > Cost model: `watts/1000 * hours * $0.14/kWh`, watts = ~90W over server idle
 > (box idles ~120W, ~210W under GPU load). See AGENTS.md / wiki/BUGS.md.
 
-## Totals (all 17 passes)
+## Totals (all 24 passes)
 | metric | value |
 |--------|-------|
-| total cost | **$0.0274** |
-| total GPU time | 2.17 h |
-| avg cost / pass | $0.00161 |
+| total cost | **$0.0457** |
+| total GPU time | 3.63 h |
+| avg cost / pass | $0.00191 |
 | electricity rate | $0.14 / kWh |
 | assumed draw | 90 W over idle |
 
@@ -37,6 +37,13 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 15 | 05:06 | eval | adapters/v4 habit (A/B/C) | 977 | — | 395.4 | — | 0.00138 |
 | 16 | 05:13 | resolver-eval | adapters/v4 → run_code end-to-end | 977 | — | 391.4 | — | 0.00137 |
 | 17 | 05:29 | resolver-eval | adapters/v4 → gsm8k lookup loop | 1319 | — | 932.9 | — | 0.00327 |
+| 18 | 05:57 | train | smollm:135m → v5 (C 150→300, skewed) | 1127 | 0.188 | 581.4 | 1111 | 0.00200 |
+| 19 | 06:05 | resolver-eval | adapters/v5 → run_code end-to-end | 1127 | — | 414.0 | — | 0.00140 |
+| 20 | 06:08 | resolver-eval | adapters/v5 → gsm8k lookup loop | 1319 | — | 927.3 | — | 0.00324 |
+| 21 | 06:31 | train | smollm:135m → v5b (C clean/balanced) | 1127 | 0.191 | 1032.9 | 1111 | 0.00361 |
+| 22 | 06:39 | resolver-eval | adapters/v5b → run_code end-to-end | 1127 | — | 420.9 | — | 0.00147 |
+| 23 | 06:55 | resolver-eval | adapters/v5b → gsm8k lookup loop | 1319 | — | 927.3 | — | 0.00324 |
+| 24 | 07:03 | resolver-eval | adapters/v4 → run_code on SAME 300-card set (fair A/B) | 1127 | — | 481.8 | — | 0.00169 |
 
 ## Cost by category
 | category | passes | sum cost $ | sum GPU-h |
@@ -63,8 +70,24 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | pass | model | tool | dataset | call_rate | well_formed | resolved / correct | vs gold |
 |------|-------|------|---------|-----------|-------------|--------------------|--------|
 | 11 | v3 | lookup | gsm8k_test (1319) | 0.992 | 1.000 | 1282 hit | **97.2%** (1282/1319) |
-| 16 | v4 | run_code | flashcards2 C (150) | 1.000 | 1.000 | 142 correct | **94.7%** (142/150) |
+| 16 | v4 | run_code | flashcards2 C (150, easy, no ÷) | 1.000 | 1.000 | 142 correct | **94.7%** (142/150) |
 | 17 | v4 | lookup | gsm8k_test (1319) | 0.995 | 0.999 | 1269 correct | **98.4%** (1269/1290) |
+| 19 | v5 | run_code | flashcards2 C (300, skewed) | 0.732 | 1.000 | 262 correct | 87.6% (262/299) |
+| 20 | v5 | lookup | gsm8k_test (1319) | 1.000 | 1.000 | 1279 correct | 98.5% (1279/1298) |
+| 22 | v5b | run_code | flashcards2 C (300, balanced) | 0.731 | 1.000 | 266 correct | **89.0%** (266/299) |
+| 23 | v5b | lookup | gsm8k_test (1319) | 1.000 | 1.000 | 1279 correct | 98.5% (1279/1298) |
+| 24 | v4 | run_code | SAME 300-card set (fair A/B) | 0.651 | 1.000 | 101 correct | 71.1% (101/142) |
+
+## FAIR A/B — v5b vs v4 on the SAME 300-card hard set
+The headline v4 "94.7%" was measured on its own easier 150-card set (no division,
+fewer 2-step). On the matched 300-card set (now incl. ÷ + more 2-step) the picture
+flips and **v5b is the strictly more capable compute adapter**:
+- v4 on 300-card set: **71.1%** (101/142), call_rate 0.651 — it under-calls run_code
+  on division/2-step cards it never trained on.
+- v5b on 300-card set: **89.0%** (266/299), call_rate 0.731 — and it ADDS division
+  coverage v4 lacks.
+So "v5b 89% < v4 94.7%" was a measurement artifact (different test sets). Use v5b
+for compute; v4 remains the best pure-lookup adapter (98.4% gsm8k).
 
 ## The headline
 A 135m model went from **0% tool-calling** (base, v1) to **97% correct,

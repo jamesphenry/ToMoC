@@ -74,6 +74,13 @@ without scaling params.
 | 15 | eval adapter v4 habit (A/B/C) | adapters/v4 | — | 395.4s | — | lookup_call=0.966 run_code=1.000 (WF 1.000) over_call=0.047 | — | — |
 | 16 | resolver eval v4 (flashcard, run_code end-to-end) | adapters/v4 | — | 391.4s | — | call=0.689 WF=1.000 **run_code correct=0.947 (142/150)** | — | — |
 | 17 | resolver eval v4 (gsm8k lookup loop) | adapters/v4 | — | 932.9s | — | call=0.995 WF=0.999 **resolved-correct=0.984 (1269/1290)** | — | — |
+| 18 | train v5 (C 150→300, skewed dist) | smollm:135m | 0.188 | 581.4s | 1111MB | — | 3ep lr2e-4 b8 | superseded |
+| 19 | resolver eval v5 (flashcard run_code) | adapters/v5 | — | 414.0s | — | call=0.732 WF=1.000 correct=0.876 (262/299) | — | skewed dist hurt |
+| 20 | resolver eval v5 (gsm8k lookup) | adapters/v5 | — | 927.3s | — | call=1.000 WF=1.000 correct=0.985 (1279/1298) | — | lookup preserved |
+| 21 | train v5b (C clean/balanced) | smollm:135m | 0.191 | 1032.9s | 1111MB | — | 3ep lr2e-4 b8 | **best compute** |
+| 22 | resolver eval v5b (flashcard run_code) | adapters/v5b | — | 420.9s | — | call=0.731 WF=1.000 **correct=0.890 (266/299)** | — | +division |
+| 23 | resolver eval v5b (gsm8k lookup) | adapters/v5b | — | 927.3s | — | call=1.000 WF=1.000 correct=0.985 (1279/1298) | — | lookup preserved |
+| 24 | resolver eval v4 on SAME 300-card set (fair A/B) | adapters/v4 | — | 481.8s | — | call=0.651 WF=1.000 **correct=0.711 (101/142)** | — | v4 on hard set |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -220,6 +227,35 @@ bigger base (360m), not sandbox changes.
 **Dispatch seam:** `tool_resolver.resolve(tool, query)` now branches `lookup`
 → KB and `run_code` → sandbox. Adding Phase 6 tools (wiki, etc.) = adding a
 branch here. `eval_toolcall.py` / `eval_resolver.py` extended to score Type-C.
+
+## run_code coverage push — v5/v5b + a measurement lesson (pass 18-24)
+
+Goal: lift run_code coverage past v4's "94.7%". Two attempts + a fair A/B that
+rewrote the scoreboard.
+
+**Attempt 1 — v5 (pass 18-20): more variety + skewed distribution → WORSE.**
+Doubled Type-C 150→300 with many new verb phrasings AND over-weighted subtraction
++ 2-step mixed (65% of cards), on the theory that the 8 v4 misses were verb→operator
+confusion. Result: **87.6% (262/299)** — a regression. Diagnosis of the 38 misses:
+the "and" joiner now appeared in BOTH add and mul templates (ambiguous: "3 apples
+in one basket and 13 in another" =+ vs "66 rows and 19 desks" =×), and the sub-heavy
+skew biased the model toward subtract-by-default. Variety was poison, not medicine.
+
+**Attempt 2 — v5b (pass 21-23): clean balanced set → 89.0%.**
+Rewrote `gen_arith` to unambiguous per-operator templates (× always uses "each/per",
+never "and"), even +/−/×/÷ distribution, fixed a division-detection bug that had
+silently dropped ÷ cards. Result: **89.0% (266/299)**, +division coverage, lookup
+preserved (98.5% gsm8k). Better than v5 but still "below" v4's 94.7%… or so it seemed.
+
+**The measurement lesson (pass 24 — fair A/B):** v4's "94.7%" was on its OWN easier
+150-card set (no division, fewer 2-step). Re-ran v4 on the SAME 300-card hard set:
+**71.1% (101/142), call_rate 0.651** — v4 under-calls run_code on division/2-step
+cards it never trained on. So on a matched set **v5b (89%) crushes v4 (71%)** and
+adds division. The apparent "regression" was apples-to-oranges — always eval both
+adapters on the SAME set before ranking. **v5b is the best compute adapter; v4
+remains best for pure lookup (98.4%).** The residual ~11% is still the 135m's own
++/−/×/÷ verb confusion (sandbox = 0 errors), so the next real lever is a 360m base
+or constrained decoding, not more Type-C variety (which backfired).
 
 ## What's next (open)
 

@@ -110,67 +110,117 @@ def mk_C(q, code, answer, src="synth.arith"):
             "answer": str(answer), "code": code}
 
 
-def gen_arith(seed=0, n=150):
-    """Generate `n` simple arithmetic word problems with a known expression.
+# Clean, UNAMBIGUOUS verb banks. Each template maps to ONE operator; joiners
+# are chosen so + and * do NOT share phrasing (the v5 miss was "and" appearing
+# in both add and mul templates -> model couldn't tell sum from product).
+# Round-robin sampling => EVEN operator distribution (no sub/mixed skew, which
+# pushed v5 toward subtract-by-default and dropped coverage 94.7% -> 87.6%).
+ADD_TEMPLATES = [
+    ("{a} children were at the park and {b} more arrived. How many are there now?",
+     lambda a, b: (f"{a} + {b}", a + b)),
+    ("A train travels {a} km on Monday and {b} km on Tuesday. Total distance?",
+     lambda a, b: (f"{a} + {b}", a + b)),
+    ("A shirt costs ${a} and socks cost ${b}. What is the total cost?",
+     lambda a, b: (f"{a} + {b}", a + b)),
+    ("There are {a} apples in one basket and {b} in another. How many in all?",
+     lambda a, b: (f"{a} + {b}", a + b)),
+    ("Sam had {a} cards and his friend gave him {b} more. How many does he have?",
+     lambda a, b: (f"{a} + {b}", a + b)),
+    ("A library had {a} books and received a donation of {b} books. Total books?",
+     lambda a, b: (f"{a} + {b}", a + b)),
+]
+SUB_TEMPLATES = [
+    ("There are {a} apples in a basket. If {b} apples are eaten, how many remain?",
+     lambda a, b: (f"{a} - {b}", a - b)),
+    ("A jar has {a} marbles. {b} marbles roll away. How many are left?",
+     lambda a, b: (f"{a} - {b}", a - b)),
+    ("{a} cookies were on a plate. {b} were eaten. How many cookies remain?",
+     lambda a, b: (f"{a} - {b}", a - b)),
+    ("Tom had ${a}. He spent ${b}. How much money is left?",
+     lambda a, b: (f"{a} - {b}", a - b)),
+    ("A store had {a} shirts. They sold {b} shirts. How many shirts remain?",
+     lambda a, b: (f"{a} - {b}", a - b)),
+    ("{a} birds were in a tree. {b} flew away. How many birds are still there?",
+     lambda a, b: (f"{a} - {b}", a - b)),
+]
+MUL_TEMPLATES = [
+    ("A recipe needs {a} g of flour per batch. For {b} batches, how many g?",
+     lambda a, b: (f"{a} * {b}", a * b)),
+    ("A classroom has {a} rows of desks with {b} desks in each row. Total desks?",
+     lambda a, b: (f"{a} * {b}", a * b)),
+    ("There are {a} packs with {b} candies in each pack. How many candies?",
+     lambda a, b: (f"{a} * {b}", a * b)),
+    ("A ticket costs ${a}. {b} tickets cost how much in total?",
+     lambda a, b: (f"{a} * {b}", a * b)),
+    ("Each bag has {a} oranges and there are {b} bags. How many oranges total?",
+     lambda a, b: (f"{a} * {b}", a * b)),
+    ("A box holds {a} chocolates and there are {b} such boxes. How many total?",
+     lambda a, b: (f"{a} * {b}", a * b)),
+]
+DIV_TEMPLATES = [
+    ("{a} candies are shared equally among {b} children. How many per child?",
+     lambda a, b: (f"{a} / {b}", a / b)),
+    ("{a} meters of ribbon are cut into {b} equal pieces. Length of each?",
+     lambda a, b: (f"{a} / {b}", a / b)),
+    ("{a} apples are split between {b} baskets evenly. How many per basket?",
+     lambda a, b: (f"{a} / {b}", a / b)),
+    ("{a} students form {b} equal teams. How many students per team?",
+     lambda a, b: (f"{a} / {b}", a / b)),
+]
+MIXED_TEMPLATES = [
+    ("A library had {a} books. It received {b} more and then lent out {c}. "
+     "How many books remain?",
+     lambda a, b, c: (f"{a} + {b} - {c}", a + b - c)),
+    ("Tom has {a} marbles. He buys {b} more and then loses {c}. How many now?",
+     lambda a, b, c: (f"{a} + {b} - {c}", a + b - c)),
+    ("A shop had {a} hats. It sold {b} hats and then made {c} new hats. "
+     "How many hats are there now?",
+     lambda a, b, c: (f"{a} - {b} + {c}", a - b + c)),
+    ("There were {a} people. {b} left and then {c} arrived. How many now?",
+     lambda a, b, c: (f"{a} - {b} + {c}", a - b + c)),
+    ("A farmer had {a} chickens. He bought {b} more and sold {c}. How many left?",
+     lambda a, b, c: (f"{a} + {b} - {c}", a + b - c)),
+    ("Sara earned ${a}. She spent ${b} and then earned ${c} more. "
+     "How much money does she have?",
+     lambda a, b, c: (f"{a} - {b} + {c}", a - b + c)),
+]
+# One flat round-robin pool => even operator distribution by construction.
+_ALL_TEMPLATES = (ADD_TEMPLATES + SUB_TEMPLATES + MUL_TEMPLATES +
+                 DIV_TEMPLATES + MIXED_TEMPLATES)
 
-    Sovereign + deterministic: plain language templates + random integers.
-    Expressions are always leaf-SAFE (no __import__/open/defs) so the sandbox
-    accepts them. Returns list of (question, code, answer).
+
+def gen_arith(seed=0, n=300):
+    """Generate `n` synthetic arithmetic word problems (clean, balanced).
+
+    Sovereign + deterministic. Round-robin over a flat pool of unambiguous
+    templates so each operator gets ~equal exposure (no distribution skew).
+    Expressions stay leaf-SAFE (no imports/open/defs) so the sandbox accepts
+    them. Returns list of (question, code, answer).
     """
     rng = random.Random(seed)
     out = []
-    templates = [
-        ("A baker made {a} loaves of bread and then baked {b} more. "
-         "How many loaves does the baker have in total?",
-         lambda a, b: (f"{a} + {b}", a + b)),
-        ("There are {a} apples in a basket. If {b} apples are eaten, "
-         "how many apples remain?",
-         lambda a, b: (f"{a} - {b}", a - b)),
-        ("A box holds {a} chocolates. If there are {b} such boxes, "
-         "how many chocolates are there altogether?",
-         lambda a, b: (f"{a} * {b}", a * b)),
-        ("{a} candies are shared equally among {b} children. "
-         "How many candies does each child get?",
-         lambda a, b: (f"{a} / {b}", a / b)),
-        ("A train travels {a} kilometers on Monday and {b} kilometers on "
-         "Tuesday. What is the total distance travelled?",
-         lambda a, b: (f"{a} + {b}", a + b)),
-        ("A shirt costs ${a} and a pair of socks costs ${b}. "
-         "What is the total cost of both items?",
-         lambda a, b: (f"{a} + {b}", a + b)),
-        ("Tom has {a} marbles. He buys {b} more marbles and then loses {c}. "
-         "How many marbles does Tom have now?",
-         lambda a, b, c: (f"{a} + {b} - {c}", a + b - c)),
-        ("A classroom has {a} rows of desks with {b} desks in each row. "
-         "How many desks are there in total?",
-         lambda a, b: (f"{a} * {b}", a * b)),
-        ("A library had {a} books. It received a donation of {b} books and "
-         "then lent out {c} books. How many books remain?",
-         lambda a, b, c: (f"{a} + {b} - {c}", a + b - c)),
-        ("A recipe needs {a} grams of flour per batch. For {b} batches, "
-         "how many grams of flour are needed?",
-         lambda a, b: (f"{a} * {b}", a * b)),
-    ]
-    i = 0
     attempts = 0
-    while len(out) < n and attempts < n * 20:
+    i = 0
+    while len(out) < n and attempts < n * 50:
         attempts += 1
-        tmpl, fn = templates[i % len(templates)]
+        tmpl, fn = _ALL_TEMPLATES[i % len(_ALL_TEMPLATES)]
         i += 1
         nargs = fn.__code__.co_argcount
+        is_div = ("equally" in tmpl or "cut into" in tmpl
+                  or "split between" in tmpl or "equal teams" in tmpl)
         if nargs == 2:
             a = rng.randint(2, 99)
             b = rng.randint(2, 99)
-            if "/ {b}" in tmpl.replace(" ", ""):
-                b = rng.randint(2, 12)  # keep division tidy
-            if b == 0:
-                b = rng.randint(2, 99)
+            if is_div:
+                # keep division tidy + integer-valued (a = b * k)
+                b = rng.randint(2, 12)
+                a = b * rng.randint(2, 12)
             c = 0
             code, ans = fn(a, b)
-        else:  # 3-arg templates
-            a = rng.randint(2, 50)
-            b = rng.randint(2, 50)
-            c = rng.randint(1, a + b)
+        else:  # 3-arg mixed templates
+            a = rng.randint(2, 60)
+            b = rng.randint(1, 40)
+            c = rng.randint(1, 40)
             code, ans = fn(a, b, c)
         # sanity: expression must evaluate to the claimed answer
         try:
@@ -178,7 +228,7 @@ def gen_arith(seed=0, n=150):
                 continue
         except Exception:
             continue
-        # only keep integer/float-clean answers for scoring stability
+        # only keep integer-clean answers for scoring stability
         if isinstance(ans, float) and not ans.is_integer():
             continue
         ans = int(ans) if isinstance(ans, float) else ans
@@ -206,7 +256,7 @@ def main():
                     help="how many gsm8k_train math cards (Type A)")
     ap.add_argument("--b-cap", type=int, default=300,
                     help="cap on Type B cards (answer)")
-    ap.add_argument("--c", type=int, default=150,
+    ap.add_argument("--c", type=int, default=300,
                     help="how many synthetic run_code (Type C) cards to add")
     ap.add_argument("--c-seed", type=int, default=0,
                     help="deterministic seed for the synthetic arithmetic")

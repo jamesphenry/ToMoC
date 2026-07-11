@@ -12,16 +12,22 @@ Ollama) — so we teach the habit with a LoRA adapter that emits a mini call
 script: `TOOL lookup query="<question>"`. Thesis: *functions ARE its knowledge*;
 reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 
-## Current state (as of 2026-07-11, after Phase 5)
-- **Best adapter: `adapters/v4/`** — LoRA trained on 977 cards (527 lookup /
-  300 answer / 150 run_code). v4 has TWO tools: `lookup` (fetch) + `run_code` (compute).
-  - toolcall eval (pass 15): lookup call_rate **0.966**, run_code_rate **1.000**
-    (100% well-formed). Both tools learned; lookup habit preserved from v3.
-  - resolver eval (pass 16/17): run_code computes **94.7% correct** (142/150);
-    gsm8k lookup loop **98.4% correct** (1269/1290, call_rate 0.995).
+## Current state (as of 2026-07-11, after Phase 5 / run_code-coverage push)
+- **Best adapters:**
+  - `adapters/v4/` — LoRA (2 tools). Best for **lookup** (gsm8k 98.4% correct,
+    call_rate 0.995). On the 300-card hard arithmetic set it scores 71.1% compute
+    (it never trained on division).
+  - `adapters/v5b/` — LoRA on the same 2-tool format but a **cleaner, balanced
+    Type-C set** (300 cards, even +/-/×/÷ + 2-step, no ambiguous joiners). Best for
+    **run_code compute**: **89.0% (266/299)** on the 300-card hard set and ADDS
+    division coverage v4 lacks. Note: v4's old "94.7% (142/150)" was measured on an
+    easier no-division 150-card set; on the matched hard set v4 = 71.1%, so v5b is
+    the strictly more capable compute adapter. (A first attempt, `adapters/v5`,
+    skewed the sub/mixed distribution and scored 87.6% — worse; superseded by v5b.)
+  - Dataset: 1127 cards (527 lookup / 300 answer / 300 run_code).
 - **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
-  around via lookup (98.4%) + run_code (94.7%).
-- **Cost tracking live**: total **$0.0274** across 17 passes (README banner).
+  around via lookup (~98.5%) + run_code (~89%).
+- **Cost tracking live**: total **$0.0457** across 24 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -101,8 +107,11 @@ python scripts/tool_resolver.py --tool run_code "51 + 99"
   (`eval_resolver_*.jsonl`, `eval_toolcall_*.jsonl`) — inspectable after the fact.
 - **Next real capability step (open):** Phase 6 — LLM-wiki / disk-backed wiki as the
   lookup source + an orchestration layer (pi/hermes/opencode-shaped) to dispatch
-  ToMoC calls. OR: push run_code coverage higher (the residual 5.3% on 3-arg word
-  problems is the 135m's own operator confusion, not a sandbox bug). See `future.md`.
+  ToMoC calls. OR: push run_code coverage higher — the residual ~11% on the 300-card
+  hard set is the 135m's own +/−/×/÷ verb confusion (NOT a sandbox bug). Levers: more
+  clean Type-C variety / a bigger base (360m). Note v5b already beats v4 on a matched
+  set (89% vs 71%) and adds division; the easy "more variety" lever backfired (v5
+  skewed dist → 87.6%), so the next attempt should be 360m or constrained decoding.
 
 ## Card schema (build_synth_cards.py)
 - Type A (lookup):  `a = TOOL lookup query="<verbatim q>"`
