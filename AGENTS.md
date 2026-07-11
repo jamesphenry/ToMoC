@@ -12,7 +12,7 @@ Ollama) — so we teach the habit with a LoRA adapter that emits a mini call
 script: `TOOL lookup query="<question>"`. Thesis: *functions ARE its knowledge*;
 reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 
-## Current state (as of 2026-07-11, after 1.7b sweep — v7)
+## Current state (as of 2026-07-11, after Phase 6 loop — 360m/v6 production base)
 - **Best adapters (same 2-tool format, 1127-card clean-balanced set):**
   - `adapters/v7/` — LoRA on **smolLM-1.7B** (hidden 2048, 24 layers).
     **Best compute**: run_code **100% (300/300)** on the hard 300-card set, 0
@@ -33,7 +33,7 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.0789** across 30 passes (README banner).
+- **Cost tracking live**: total **$0.0932** across 32 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -120,6 +120,45 @@ python scripts/tool_resolver.py --tool run_code "51 + 99"
   lookup source + an orchestration layer (pi/hermes/opencode-shaped) to dispatch
   ToMoC calls AND feed results back so the model emits a final answer. The "emit a
   call → resolve → produce final answer" loop is the missing half of ToMoC.
+
+## Phase 6 — the closing ToMoC loop (2026-07-11, 360m/v6 default base)
+User locked in **360m (v6)** as the production base (1.7B too slow for the
+marginal gain). Built `scripts/orchestrate.py`: the two-turn loop
+`q → turn1 (model emits TOOL call) → resolve → turn2 (feed result back) →
+model emits FINAL ANSWER`. Modes: `--ask "<q>"` (live single) and
+`--data <jsonl> --kind flashcard|gsm8k` (batched two-pass scoring). Batched
+turn-1-all then turn-2-all (chunk=16) to keep the P4 at ~97% util; per-item
+JSONL to `logs/orchestrate_*.jsonl`; passdb-logged (passes 31-32).
+
+**Result — the loop mechanically works, and exposes ONE clean gap:**
+- gsm8k (1319): call 0.986, resolved_hit 0.992, **canonical_correct 1280/1319
+  = 97.0%** (the tool gets the right answer), but the model's own turn-2
+  **final_answer_correct = 708/1319 = 53.7%**.
+- **Diagnosis (measured, not guessed):** the 53.7% is NOT a reasoning failure.
+  Of 1301 rows that called a tool, **571 (~44%) emitted an EMPTY turn-2** (just
+  EOS after `Final answer:`). Of the 730 rows where it DID answer,
+  **708 = 97.0% were correct** — the tiny model faithfully echoes the tool
+  result WHEN it continues. v6 was never trained on the two-turn
+  `Tool result: X\nFinal answer:` format, so it often just stops.
+- flashcard run_code loop: canonical 289/300 = 96.3%, final 251/300 = 83.7%
+  (183/821 empty turn-2). (Note: flashcard join shows gold=None for many C rows
+  in the quick diagnostic — gsm8k is the trustworthy end-to-end signal.)
+- **Open next (Phase 6b):** add Type-D two-turn cards (question + call + tool
+  result → final answer) to the training set and retrain v6→v8. Target: drive
+  empty-turn-2 → ~0 so end-to-end tracks the tool's ~97% ceiling. This is a
+  training-format fix, not a bigger-base or better-resolver problem.
+
+Run it:
+```bash
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# live single-question ToMoC loop:
+python -u scripts/orchestrate.py --model adapters/v6 --ask "48 - 5 + 20"
+# batched end-to-end final-answer scoring:
+python -u scripts/orchestrate.py --model adapters/v6 \
+        --data data/raw/flashcards2.jsonl --kind flashcard
+python -u scripts/orchestrate.py --model adapters/v6 \
+        --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
+```
 
 ## Card schema (build_synth_cards.py)
 - Type A (lookup):  `a = TOOL lookup query="<verbatim q>"`

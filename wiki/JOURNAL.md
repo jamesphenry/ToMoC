@@ -87,6 +87,8 @@ without scaling params.
 | 28 | train v7 (1.7b base, C clean/balanced) | smollm:1.7b | 0.083 | 3524.4s | 4236MB | — | 3ep lr2e-4 b8 | **best compute** |
 | 29 | resolver eval v7 (flashcard run_code) | adapters/v7 | — | 1140.5s | — | call=0.720 WF=1.000 **correct=1.000 (300/300)** | — | 0 misses |
 | 30 | resolver eval v7 (gsm8k lookup) | adapters/v7 | — | 2937.5s | — | call=0.964 WF=1.000 correct=0.990 (1253/1266) | — | residual=KB gaps |
+| 31 | orchestrate flashcard (2-turn ToMoC) | adapters/v6 | — | 1044.4s | — | canonical=0.963 final=0.837 (empty t2=183/821) | $0.0037 | loop works |
+| 32 | orchestrate gsm8k (2-turn ToMoC) | adapters/v6 | — | 1817.8s | — | canonical=0.970 final=0.537; of 730 non-empty t2 → 708=0.970 | $0.0064 | gap=empty t2 |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -329,6 +331,39 @@ tools. It's now the default best adapter. Cost to confirm: 3 more passes, +$0.01
   re-wording gaps. Cost to confirm the sweep: +$0.026 (→ total **$0.0789 / 30
   passes**). v7 = best compute adapter; v6 = speed/accuracy sweet spot; v5b if
   stuck at 135m.
+
+## Phase 6 — closing the ToMoC loop (pass 31-32, 360m/v6)
+
+The first 5 phases proved the model LEARNS to call tools and the sovereign
+resolver computes the right answer. But every eval so far stopped at "did the
+tool's answer match gold?" — the model never SAW the result and never emitted a
+final answer. Phase 6 builds the missing half: `scripts/orchestrate.py`, a
+two-turn loop — `q → turn1 (model emits TOOL call) → resolve → turn2 (feed the
+tool result back) → model emits FINAL ANSWER`.
+
+Live smoke: `--ask "There were 48 people. 5 left and then 20 arrived..."` →
+turn1 `TOOL run_code code="48 - 5 + 20"` → resolver 63 → turn2 `63`. The loop
+runs end-to-end with no human in the middle. ✅
+
+Batched scoring (v6, two passes: turn-1-all then turn-2-all, chunk=16, ~97%
+P4 util):
+- **gsm8k (1319):** call 0.986, resolved_hit 0.992, **canonical 1280/1319 =
+  97.0%** (tool right), model's own **final 708/1319 = 53.7%**.
+- **flashcard run_code (300 C):** canonical 289/300 = 96.3%, final 251/300 =
+  83.7%.
+
+The gap looked alarming (97% → 54%) until diagnosed. **It is NOT a reasoning
+failure:** of 1301 tool-calling rows, **571 (~44%) emitted an EMPTY turn-2**
+(EOS right after `Final answer:`). Of the 730 that DID answer, **708 = 97.0%
+were correct** — the tiny model faithfully echoes the tool result WHEN it
+continues. Root cause: v6 was never trained on the two-turn
+`Tool result: X\nFinal answer:` format, so it frequently just stops. This is a
+training-FORMAT gap, not a base-size or resolver problem (BUG-015-adjacent:
+diagnose before despairing — the "53.7%" headline hid a 97% capability).
+
+**Next (Phase 6b, open):** synthesize Type-D two-turn cards (question + call +
+tool result → final answer), fold into the 1127-card set, retrain v6→v8.
+Target: empty-turn-2 → ~0 so end-to-end tracks the tool's ~97% ceiling.
 
 ## What's next (open)
 
