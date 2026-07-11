@@ -400,15 +400,94 @@ a **training-format** problem (not base-size or resolver):
   loop. flashcard final% is a known join artifact (gold=None for many C rows);
   gsm8k is the trustworthy signal.
 
-## What's next (open)
+## Phase 6c — honesty on KB-miss + show-work (v9/v10, pass 36-39)
 
-- **Make training actually teach the habit.** Lean: synthesize ~200-400 primed
-  Type-A examples (we have 7,473 gsm8k + knowledge/reasoning wrong-items as a
-  lookup KB), prime the prompt ("if unsure, call TOOL lookup"), retrain, re-eval.
-  Bigger base (360m) is the fallback lever, not the first move (sovereignty+KISS).
-- Scale the flashcard set beyond 60.
-- Later (future.md): JSON + constrained grammar, `run_code`, SearXNG, LLM-wiki,
-  reasoning self-correct, multi-tool, ToMoC orchestration.
+Two gaps remained after 6b closed the loop: (1) on a **KB-miss** the model
+sometimes *guessed a number* instead of admitting ignorance, and (2) it emitted
+a bare `TOOL call` with no visible reasoning — hard to trust, hard to debug.
+
+### Type-E — graceful KB-miss honesty (v9, pass 36)
+Measured the gap first (don't guess, diagnose): ran v8 gsm8k misses and found
+**11 misses; of those 4 (~36%) emitted a fabricated number** (e.g. `112`, `4`,
+`100`, `60`) instead of stopping. That's the model *filling the silence* — a
+real honesty failure, not a routing bug.
+
+Fix: **Type-E** cards (`build_synth_cards.py --e N`) — the resolver returns a
+real "No answer found in the knowledge base." verdict, and the gold target is a
+plain `<answer>…I don't know / can't find…`. Trained **v9** (360m, 1727 cards =
+527A/300B/300C/300D/300E, loss **0.1223**, 2287.9s, 1620MB, pass 36). Verified
+via an ad-hoc miss-branch probe (`/tmp`): on fabricated-entity questions v9
+emits `<answer>` with NO guessed number — the 4/11 guessing behavior is gone.
+
+### BUG-008 strikes again — MAX_NEW too short for show-work
+While wiring v10 I caught that `orchestrate.py` capped `MAX_NEW = 64` tokens.
+That truncates a show-work *prefix* before the `TOOL call` (same class of bug as
+the old well_formed=0.488 truncation). Bumped to **160**. Re-verified v8 at 160
+(pass 37): `correct_vs_gold 0.9845` — no regression. (BUG-008 now documented in
+AGENTS.md as "truncation bites twice — guard MAX_NEW.")
+
+### Type-F — show-your-work (v10, pass 38)
+Added **Type-F** cards (`--f N`) from user-edited "show-work" seed
+(`data/raw/f_cards_seed.txt`): each is a word problem with a worked `work`
+string + a numeric `code` expr. Target = `{work} TOOL run_code code="{code}"`.
+Split 128 seed problems into **106 numeric** (kept) + **22 symbolic**
+(geometry/clock/algebra/comparison → `data/raw/f_cards_symbolic.txt`, deferred;
+run_code pipeline stays numeric-only). Trained **v10** = v9 + Type-F (360m, 1833
+cards = 527A/300B/300C/300D/300E/106F, loss **0.2351**, 2642.7s, 1660MB, pass 38).
+
+**Honest result (pass 39, flashcard router-metrics):** router_precision
+**0.972** / recall **0.968**, call_rate 0.996, well_formed 0.996, over_call 0,
+false_tool 14, missed_tool 2. Type-E honesty held (no guessed numbers). BUT the
+show-work *prefix did not transfer* — v10 emits the clean `TOOL run_code
+code="…"` without the verbose reasoning; a few word-problems still misroute to
+`lookup` (the format habit won, the prefix didn't). The router-metrics eval is
+the authoritative signal (flashcard `resolved_hit 0.721` is a known join
+artifact — gold=None for many C rows; gsm8k stays the trustworthy end-to-end
+number). Also fixed a **run_code empty-code crash** in `tool_resolver.resolve()`
+(BUG-008-adjacent): malformed/truncated `run_code` calls with `None` code now
+return a clean `miss` instead of `compile()` crashing — verified by the pass-39
+eval that failed pre-fix and passed post-fix.
+
+### Doc-sync infra (commit 666f84f)
+Added `scripts/sync_docs.py` + `.githooks/pre-commit`: on every commit, the
+README cost banner / AGENTS cost line / runs.md Totals + new per-pass rows are
+regenerated idempotently from `benchmarks/passes.db`. The hook is wired via
+`core.hooksPath` so it propagates to BOTH remotes. JOURNAL stays hand-written
+(assistant-owned) — explicitly excluded from automation. Also fixed a
+`||` malformed-pipe bug on runs.md rows 35-39 introduced by an earlier manual
+sync.
+
+**Cost so far: $0.1278 across 39 passes, 10.15 GPU-h.** Git clean at `666f84f`.
+
+**Where this leaves the thesis:** ToMoC is demonstrably *working* — a 360m
+sovereign model routes to external experts (KB lookup ~99% + run_code ~97%) and
+faithfully reports the answer, with honest "I don't know" on KB-miss. Residual
+~4% gsm8k is KB re-wording + rare arithmetic slips, not the loop.
+
+## What's next (directions — open, not yet chosen)
+
+The repo is at a clean resting point. Levers, roughly lean → moonshot:
+
+1. **Close the ~4% residual (lean).** It's KB re-wording gaps + rare arithmetic
+   slips. Options: a KB-rephrase pass (normalize question phrasing so more hit
+   exact/prefix), or a few targeted Type-F word-problem cards for the misrouted
+   cases (e.g. the "Ariel hammers" lookup-misfire). Highest ROI, lowest risk.
+2. **Make show-work actually transfer (medium).** The Type-F prefix didn't stick
+   at 360m. Could try: longer/cleaner work exemplars, a small weight on the work
+   span, or prompt-tuning the turn-1 cue to invite reasoning. Pure capability
+   polish — the router already works without it.
+3. **PHASE 7 — LLM-wiki (moonshot, the original open item).** Replace the static
+   8.9k gsm8k KB with a disk-backed wiki the model READS and WRITES: it stores
+   what it learns, re-phrases entries to close re-wording gaps, and grows real
+   memory instead of a frozen lookup table. The honest "I don't know" → "let me
+   record this" bridge. Documented in future.md.
+4. **From-scratch (North Star, deferred).** Build the base model ourselves —
+   tokenizer + corpus + pretrain — once the concept + features are proven here.
+   This lab is explicitly the pain-point finder; from-scratch is the payoff.
+
+User decision so far: not calling it done; wants to keep pushing, starting from
+direction ideas. Sovereignty + KISS stay the constraints. (See future.md for
+the flag-to-dataset human-in-the-loop design that gates any autonomous KB write.)
 
 ---
 
