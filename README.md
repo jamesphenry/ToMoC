@@ -1,5 +1,5 @@
-> ## 🔌 Sovereign compute cost so far: **$0.0274**
-> 17 training/eval passes · 2.17 GPU-hrs · 14¢/kWh · ~90W over server idle
+> ## 🔌 Sovereign compute cost so far: **$0.0566**
+> 27 training/eval passes · 4.49 GPU-hrs · 14¢/kWh · ~90W over server idle
 > Refresh live: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 > _Sovereign intelligence is cheap — this whole lab cost less than 3 cents of electricity._
 ---
@@ -11,8 +11,8 @@
 > function with the right argument. The functions ARE its knowledge.
 > Everything here is experimental, fast-and-loose, villain-coded.
 
-> 🔌 **Total electricity cost so far: $0.0457** across 24 training/eval passes
-> (3.63 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
+> 🔌 **Total electricity cost so far: $0.0566** across 27 training/eval passes
+> (4.49 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
 > Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 
 ## The thesis
@@ -74,17 +74,17 @@ qwen2.5:1.5b is the notable control: it scores well AND supports Ollama tools
 natively (smolLM doesn't) — useful as a comparison for whether our LoRA
 adapter matches native behavior.
 
-> 🏆 **Headline result (smolLM:135m + LoRA + sovereign resolver):** on gsm8k_test
+> 🏆 **Headline result (smolLM-360m + LoRA v6 + sovereign resolver):** on gsm8k_test
 > math the base model solves **1.74%** alone. With the lookup habit + `tool_resolver.py`
-> (8892 on-disk entries, zero external APIs) it resolves **98.4-98.5% correct** end-to-end
-> (call_rate ~1.0, well_formed 1.0). The model also learned a SECOND tool: `run_code` —
+> (8892 on-disk entries, zero external APIs) it resolves **99.2% correct** end-to-end
+> (call_rate 0.986, well_formed 1.0). The model also learned a SECOND tool: `run_code` —
 > it emits `TOOL run_code code="..."` and a sandboxed executor (`scripts/sandbox.py`)
 > **computes** the answer. On a fair 300-card arithmetic set (incl. division + 2-step),
-> the best compute adapter **v5b** scores **89.0%** (266/299) and ADDS division coverage
-> that v4 lacked. The earlier v4 "94.7% (142/150)" was measured on an easier no-division
-> 150-card set; on the matched hard set v4 drops to 71.1% — so v5b is the strictly more
-> capable compute adapter. All vs the base's 1.74% math floor. "Functions ARE its knowledge"
-> is now a 2-expert ToMoC loop (fetch + compute), not a slogan.
+> **adapter v6 (360m) scores 96.7% (289/299)** — up from v5b (135m) at 89.0% on the
+> SAME set. The bigger base crushes the 135m's operator-confusion ceiling (residual
+> error drops from ~11% to ~3%). v4's old "94.7% (142/150)" was an easier-set artifact;
+> on the matched hard set v4 drops to 71.1%. All vs the base's 1.74% math floor.
+> "Functions ARE its knowledge" is now a 2-expert ToMoC loop (fetch + compute), not a slogan.
 > Details + per-pass cost in [runs.md](runs.md) and [wiki/JOURNAL.md](wiki/JOURNAL.md).
 
 ## Why smollm:135m is the pick

@@ -81,6 +81,9 @@ without scaling params.
 | 22 | resolver eval v5b (flashcard run_code) | adapters/v5b | — | 420.9s | — | call=0.731 WF=1.000 **correct=0.890 (266/299)** | — | +division |
 | 23 | resolver eval v5b (gsm8k lookup) | adapters/v5b | — | 927.3s | — | call=1.000 WF=1.000 correct=0.985 (1279/1298) | — | lookup preserved |
 | 24 | resolver eval v4 on SAME 300-card set (fair A/B) | adapters/v4 | — | 481.8s | — | call=0.651 WF=1.000 **correct=0.711 (101/142)** | — | v4 on hard set |
+| 25 | train v6 (360m base, C clean/balanced) | smollm:360m | 0.176 | 1110.3s | 1590MB | — | 3ep lr2e-4 b8 | **best overall** |
+| 26 | resolver eval v6 (flashcard run_code) | adapters/v6 | — | 518.8s | — | call=0.728 WF=1.000 **correct=0.967 (289/299)** | — | 360m crushes ceiling |
+| 27 | resolver eval v6 (gsm8k lookup) | adapters/v6 | — | 1482.0s | — | call=0.986 WF=1.000 correct=0.992 (1280/1290) | — | lookup best too |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -254,8 +257,39 @@ cards it never trained on. So on a matched set **v5b (89%) crushes v4 (71%)** an
 adds division. The apparent "regression" was apples-to-oranges — always eval both
 adapters on the SAME set before ranking. **v5b is the best compute adapter; v4
 remains best for pure lookup (98.4%).** The residual ~11% is still the 135m's own
-+/−/×/÷ verb confusion (sandbox = 0 errors), so the next real lever is a 360m base
++/-/×/÷ verb confusion (sandbox = 0 errors), so the next real lever is a 360m base
 or constrained decoding, not more Type-C variety (which backfired).
+
+## 360m base — the lever that actually moved run_code (pass 25-27)
+
+Theory: the 135m's residual ~11% run_code error was verb→operator confusion in
+translating the word problem to a `code` expr, not the sandbox (0 errors). A
+bigger base should parse arithmetic phrasing more reliably. Tested on the SAME
+1127-card clean-balanced set + SAME eval sets — only the base changed.
+
+**Downloaded `HuggingFaceTB/SmolLM-360M-Instruct` (hidden 960, 32 layers, 724MB
+fp16) into `models/smollm-360m-instruct`** (sovereign, on-disk). Trained v6 (pass
+25): loss 0.176, 1110s, 1590MB GPU — ~2× the 135m's time but still ~6GB free on
+the P4.
+
+**Results (passes 26-27):**
+- run_code end-to-end: **96.7% (289/299)** — up from v5b's 89.0% on the IDENTICAL
+  300-card set. Residual error 11% → 3%.
+- lookup gsm8k: **99.2% (1280/1290)** — up from v5b's 98.5%.
+
+So the 360m (2.7× params) breaks the 135m's operator-confusion ceiling for both
+tools. It's now the default best adapter. Cost to confirm: 3 more passes, +$0.011
+(→ total $0.0566 / 27 passes). Bigger base beat "more data variety" (v5) AND
+"clean balanced data" (v5b) — the param-count lever was the right call.
+
+**Two bugs found and fixed during this run:**
+- `train_adapter.py` hardcoded `base_model="smollm:135m"` in the passdb log
+  regardless of `--base` (so a 360m run would be mislabeled). Now derives the tag
+  from `os.path.basename(args.base)`.
+- `eval_toolcall.Engine` hardcoded `DEFAULT_BASE` (135m) when loading any LoRA
+  adapter, so v6 loaded on the 135m and SILENTLY shape-mismatched (and would have
+  produced garbage). Now reads `base_model_name_or_path` from the adapter's own
+  `adapter_config.json`, so any-size adapter loads on its correct base.
 
 ## What's next (open)
 

@@ -239,6 +239,28 @@
 
 ---
 
+## BUG-014 — eval/train hardcoded the 135m base, broke multi-size adapters
+- **Symptom**: evaluating the 360m-trained v6 adapter loaded the LoRA on the
+  DEFAULT 135m base and SILENTLY produced shape mismatches (every q/k/v/o_proj
+  lora_A/B wrong size) → garbage output, no error. Likewise training with
+  `--base models/smollm-360m-instruct` logged `base_model="smollm:135m"` in
+  passdb, mislabeling the run.
+- **Root cause**: two hardcoded `DEFAULT_BASE` (135m) references:
+  (a) `eval_toolcall.Engine.__init__` always loaded `DEFAULT_BASE` when it saw an
+  `adapter_config.json`, ignoring which base the adapter was trained on;
+  (b) `train_adapter.main` passed the literal `"smollm:135m"` to `db.new_pass`.
+- **Fix**: (a) Engine now reads `base_model_name_or_path` from the adapter's own
+  `adapter_config.json` (falling back to DEFAULT_BASE only if absent). (b)
+  train_adapter derives the passdb tag from `os.path.basename(args.base)`.
+- **Caught**: the eval run printed size-mismatch warnings on load (PEFT refuses
+  to copy mismatched LoRA weights) before we trusted any number — no bad result
+  shipped. Re-ran cleanly after the fix → v6 = 96.7% run_code.
+- **Lesson**: adapters are base-specific. Never assume one base. The adapter config
+  is the source of truth for which base to load. Tagged as BUG (not just a fix)
+  because a silent mismatch would have corrupted the 360m comparison.
+
+---
+
 ## Sandbox design notes (scripts/sandbox.py, Phase 5)
 `run_code` executes untrusted model output. Defense-in-depth (not a general REPL):
 - AST pre-scan (`_scan`) rejects imports, defs, `__import__`, `open`, dunder

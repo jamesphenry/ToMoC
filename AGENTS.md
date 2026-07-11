@@ -12,22 +12,23 @@ Ollama) — so we teach the habit with a LoRA adapter that emits a mini call
 script: `TOOL lookup query="<question>"`. Thesis: *functions ARE its knowledge*;
 reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 
-## Current state (as of 2026-07-11, after Phase 5 / run_code-coverage push)
-- **Best adapters:**
-  - `adapters/v4/` — LoRA (2 tools). Best for **lookup** (gsm8k 98.4% correct,
-    call_rate 0.995). On the 300-card hard arithmetic set it scores 71.1% compute
-    (it never trained on division).
-  - `adapters/v5b/` — LoRA on the same 2-tool format but a **cleaner, balanced
-    Type-C set** (300 cards, even +/-/×/÷ + 2-step, no ambiguous joiners). Best for
-    **run_code compute**: **89.0% (266/299)** on the 300-card hard set and ADDS
-    division coverage v4 lacks. Note: v4's old "94.7% (142/150)" was measured on an
-    easier no-division 150-card set; on the matched hard set v4 = 71.1%, so v5b is
-    the strictly more capable compute adapter. (A first attempt, `adapters/v5`,
-    skewed the sub/mixed distribution and scored 87.6% — worse; superseded by v5b.)
+## Current state (as of 2026-07-11, after 360m comparison — v6)
+- **Best adapters (same 2-tool format, 1127-card clean-balanced set):**
+  - `adapters/v6/` — LoRA on **smolLM-360m-instruct** (hidden 960, 32 layers).
+    **Best overall**: gsm8k lookup **99.2%** (1280/1290, call_rate 0.986) AND
+    run_code **96.7%** (289/299) on the 300-card hard set. The 360m crushes the
+    135m's operator-confusion ceiling (residual error 11% -> 3%).
+  - `adapters/v5b/` — LoRA on **smolLM-135m** (cleaner balanced Type-C, 300 cards).
+    run_code **89.0% (266/299)**, lookup 98.5%. Good if you MUST stay at 135m.
+  - `adapters/v4/` — 135m, 2 tools; on the hard 300-card set run_code only 71.1%
+    (it never trained on division). Lookup 98.4%.
+  - (v5, skewed sub/mixed dist, 87.6% — superseded by v5b. Don't use.)
   - Dataset: 1127 cards (527 lookup / 300 answer / 300 run_code).
 - **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
-  around via lookup (~98.5%) + run_code (~89%).
-- **Cost tracking live**: total **$0.0457** across 24 passes (README banner).
+  around via lookup (~99%) + run_code (~97% on v6).
+- **Base models on disk:** `models/smollm-135m-instruct` (default) and
+  `models/smollm-360m-instruct` (downloaded for the comparison).
+- **Cost tracking live**: total **$0.0566** across 27 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;

@@ -73,9 +73,20 @@ class Engine:
             is_adapter = os.path.exists(os.path.join(model, "adapter_config.json"))
             if is_adapter:
                 from peft import PeftModel
+                # Pick the CORRECT base from the adapter's own config so a
+                # 360m-trained adapter loads on the 360m base, not 135m.
                 base = DEFAULT_BASE
+                cfg_path = os.path.join(model, "adapter_config.json")
+                if os.path.exists(cfg_path):
+                    try:
+                        _cfg = json.load(open(cfg_path))
+                        _bm = _cfg.get("base_model_name_or_path")
+                        if _bm:
+                            base = _bm
+                    except Exception:
+                        pass
                 base_mdl = AutoModelForCausalLM.from_pretrained(
-                    base, dtype=torch.float16, device_map="auto")
+                    base, torch_dtype=torch.float16, device_map="auto")
                 self.mdl = PeftModel.from_pretrained(base_mdl, model)
             else:
                 self.mdl = AutoModelForCausalLM.from_pretrained(

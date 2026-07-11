@@ -44,6 +44,9 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 22 | 06:39 | resolver-eval | adapters/v5b → run_code end-to-end | 1127 | — | 420.9 | — | 0.00147 |
 | 23 | 06:55 | resolver-eval | adapters/v5b → gsm8k lookup loop | 1319 | — | 927.3 | — | 0.00324 |
 | 24 | 07:03 | resolver-eval | adapters/v4 → run_code on SAME 300-card set (fair A/B) | 1127 | — | 481.8 | — | 0.00169 |
+| 25 | 07:29 | train | smollm:360m → v6 (C clean/balanced) | 1127 | 0.176 | 1110.3 | 1590 | 0.00389 |
+| 26 | 08:02 | resolver-eval | adapters/v6 → run_code end-to-end | 1127 | — | 518.8 | — | 0.00181 |
+| 27 | 08:27 | resolver-eval | adapters/v6 → gsm8k lookup loop | 1319 | — | 1482.0 | — | 0.00519 |
 
 ## Cost by category
 | category | passes | sum cost $ | sum GPU-h |
@@ -77,6 +80,23 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 22 | v5b | run_code | flashcards2 C (300, balanced) | 0.731 | 1.000 | 266 correct | **89.0%** (266/299) |
 | 23 | v5b | lookup | gsm8k_test (1319) | 1.000 | 1.000 | 1279 correct | 98.5% (1279/1298) |
 | 24 | v4 | run_code | SAME 300-card set (fair A/B) | 0.651 | 1.000 | 101 correct | 71.1% (101/142) |
+| 26 | v6 (360m) | run_code | flashcards2 C (300, balanced) | 0.728 | 1.000 | 289 correct | **96.7%** (289/299) |
+| 27 | v6 (360m) | lookup | gsm8k_test (1319) | 0.986 | 1.000 | 1280 correct | **99.2%** (1280/1290) |
+
+## 360m vs 135m — the compute-coverage lever (passes 25-27)
+Bigger base is the lever that actually moved run_code past the 135m ceiling.
+Same 1127-card clean-balanced training set, same eval sets, only the base changes:
+
+| base | adapter | run_code (300-card) | lookup (gsm8k) | GPU mem |
+|------|---------|---------------------|----------------|---------|
+| 135m | v5b | 89.0% (266/299) | 98.5% (1279/1298) | 1111 MB |
+| **360m** | **v6** | **96.7% (289/299)** | **99.2% (1280/1290)** | 1590 MB |
+
+The 135m's residual ~11% error was genuine verb→operator confusion
+(`20 * 41` for `20 - 41`). The 360m (2.7× params) cuts that to ~3% — it just
+parses the arithmetic word problem more reliably. Training 2× slower, eval ~2×
+slower, but still fits the 8GB P4 with ~6GB headroom. **v6 is now the default
+best adapter** for both tools; keep v5b if you must stay at 135m.
 
 ## FAIR A/B — v5b vs v4 on the SAME 300-card hard set
 The headline v4 "94.7%" was measured on its own easier 150-card set (no division,

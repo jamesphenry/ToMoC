@@ -181,8 +181,9 @@ def main():
 
     # persist to passdb
     db = PassDB()
+    base_tag = os.path.basename(os.path.normpath(args.base))
     pid = db.new_pass(
-        base_model="smollm:135m", lora_r=args.r, lora_alpha=args.alpha,
+        base_model=base_tag, lora_r=args.r, lora_alpha=args.alpha,
         epochs=args.epochs, lr=args.lr, num_cards=len(ds),
         loss_final=loss_final, walltime_s=round(wall, 1),
         gpu_mem_used_mb=round(gpu_mem, 1) if gpu_mem else None,
