@@ -84,6 +84,9 @@ without scaling params.
 | 25 | train v6 (360m base, C clean/balanced) | smollm:360m | 0.176 | 1110.3s | 1590MB | — | 3ep lr2e-4 b8 | **best overall** |
 | 26 | resolver eval v6 (flashcard run_code) | adapters/v6 | — | 518.8s | — | call=0.728 WF=1.000 **correct=0.967 (289/299)** | — | 360m crushes ceiling |
 | 27 | resolver eval v6 (gsm8k lookup) | adapters/v6 | — | 1482.0s | — | call=0.986 WF=1.000 correct=0.992 (1280/1290) | — | lookup best too |
+| 28 | train v7 (1.7b base, C clean/balanced) | smollm:1.7b | 0.083 | 3524.4s | 4236MB | — | 3ep lr2e-4 b8 | **best compute** |
+| 29 | resolver eval v7 (flashcard run_code) | adapters/v7 | — | 1140.5s | — | call=0.720 WF=1.000 **correct=1.000 (300/300)** | — | 0 misses |
+| 30 | resolver eval v7 (gsm8k lookup) | adapters/v7 | — | 2937.5s | — | call=0.964 WF=1.000 correct=0.990 (1253/1266) | — | residual=KB gaps |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -287,9 +290,45 @@ tools. It's now the default best adapter. Cost to confirm: 3 more passes, +$0.01
   regardless of `--base` (so a 360m run would be mislabeled). Now derives the tag
   from `os.path.basename(args.base)`.
 - `eval_toolcall.Engine` hardcoded `DEFAULT_BASE` (135m) when loading any LoRA
-  adapter, so v6 loaded on the 135m and SILENTLY shape-mismatched (and would have
+  loaded on the 135m and SILENTLY shape-mismatched (and would have
   produced garbage). Now reads `base_model_name_or_path` from the adapter's own
   `adapter_config.json`, so any-size adapter loads on its correct base.
+
+## 1.7B base — closing the compute loop (pass 28-30)
+
+  User: "changing to the larger model is smart… try 1.7b its soo slow, but lets
+  see." (There's no 260m in the SmolLM family — 135m / 360m / 1.7B are the sizes;
+  used 1.7B as the next step up.) Downloaded `HuggingFaceTB/SmollLM-1.7B` (hidden
+  2048, 24 layers, ~6.8GB across 2 safetensors shards) into `models/smollm-1.7b-instruct`.
+
+  **Training v7 (pass 28):** loss 0.083, **3524s (~59 min)**, 4236MB GPU — 3.4×
+  the 360m's time and ~4× the 135m's, but only 4236MB of 7680MB on the P4 (no OOM).
+  Cost $0.0123 (the most expensive single pass so far, ~3× v6's).
+
+  **Results (passes 29-30), SAME 300-card set:**
+  - run_code end-to-end: **100% (300/300)** — 0 misses across all arithmetic cards
+    including division + 2-step. The 1.7B (12.6× the 135m's params) eliminates the
+    operator-confusion ceiling entirely. Verified manually: it emits correct `code`
+    for negatives (`13 - 78` → `-65`), division (`15 / 3` → `5.0`==`5`), mixed
+    (`48 - 21 + 5` → `32`).
+  - lookup gsm8k: **99.0% (1253/1266 scored)**, call_rate 0.964, WF 1.000. The 13
+    scored-wrong are KB re-wording gaps (resolver returns a number for a question
+    it can't express as arithmetic, e.g. "half that much"), NOT habit misses; +6
+    no-KB rows → 1259/1319 = 95.5% end-to-end.
+
+  **Size sweep summary (run_code / lookup, same set):**
+  | base | run_code | lookup | train min | eval min | GPU |
+  |------|----------|--------|-----------|----------|-----|
+  | 135m (v5b) | 89.0% | 98.5% | 10 | ~23 | 1111MB |
+  | 360m (v6) | 96.7% | 99.2% | 18 | ~23 | 1590MB |
+  | **1.7B (v7)** | **100%** | **99.0%** | 59 | ~68 | 4236MB |
+
+  **Conclusion:** the bigger base is THE lever — bigger params monotonically beat
+  more/better data. But 1.7B already maxes the synthetic run_code set, so the next
+  lever is NOT a bigger base; it's task/template diversity + closing the KB
+  re-wording gaps. Cost to confirm the sweep: +$0.026 (→ total **$0.0789 / 30
+  passes**). v7 = best compute adapter; v6 = speed/accuracy sweet spot; v5b if
+  stuck at 135m.
 
 ## What's next (open)
 

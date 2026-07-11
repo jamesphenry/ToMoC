@@ -1,5 +1,5 @@
-> ## 🔌 Sovereign compute cost so far: **$0.0566**
-> 27 training/eval passes · 4.49 GPU-hrs · 14¢/kWh · ~90W over server idle
+> ## 🔌 Sovereign compute cost so far: **$0.0789**
+> 30 training/eval passes · 6.18 GPU-hrs · 14¢/kWh · ~90W over server idle
 > Refresh live: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 > _Sovereign intelligence is cheap — this whole lab cost less than 3 cents of electricity._
 ---
@@ -74,17 +74,22 @@ qwen2.5:1.5b is the notable control: it scores well AND supports Ollama tools
 natively (smolLM doesn't) — useful as a comparison for whether our LoRA
 adapter matches native behavior.
 
-> 🏆 **Headline result (smolLM-360m + LoRA v6 + sovereign resolver):** on gsm8k_test
-> math the base model solves **1.74%** alone. With the lookup habit + `tool_resolver.py`
-> (8892 on-disk entries, zero external APIs) it resolves **99.2% correct** end-to-end
-> (call_rate 0.986, well_formed 1.0). The model also learned a SECOND tool: `run_code` —
-> it emits `TOOL run_code code="..."` and a sandboxed executor (`scripts/sandbox.py`)
-> **computes** the answer. On a fair 300-card arithmetic set (incl. division + 2-step),
-> **adapter v6 (360m) scores 96.7% (289/299)** — up from v5b (135m) at 89.0% on the
-> SAME set. The bigger base crushes the 135m's operator-confusion ceiling (residual
-> error drops from ~11% to ~3%). v4's old "94.7% (142/150)" was an easier-set artifact;
-> on the matched hard set v4 drops to 71.1%. All vs the base's 1.74% math floor.
-> "Functions ARE its knowledge" is now a 2-expert ToMoC loop (fetch + compute), not a slogan.
+> 🏆 **Headline result (smolLM + LoRA + sovereign resolver):** on gsm8k_test math the
+> base model solves **1.74%** alone. With the lookup habit + `tool_resolver.py`
+> (8892 on-disk entries, zero external APIs) it resolves **~99% correct** end-to-end
+> (call_rate ~0.96-0.99, well_formed 1.0). The model also learned a SECOND tool:
+> `run_code` — it emits `TOOL run_code code="..."` and a sandboxed executor
+> (`scripts/sandbox.py`) **computes** the answer. On a fair 300-card arithmetic set
+> (incl. division + 2-step), the bigger base KEEPS WINNING:
+>   - **smolLM-1.7B + LoRA v7 → 100% (300/300)** run_code, 0 misses
+>   - smolLM-360M + LoRA v6 → 96.7% (289/299)
+>   - smolLM-135M + LoRA v5b → 89.0% (266/299)  (v4's old "94.7% (142/150)" was an
+>     easier-set artifact; on the matched hard set v4 drops to 71.1%)
+> The bigger base crushes the 135m's operator-confusion ceiling (residual error
+> drops from ~11% → ~3% → 0%). All vs the base's 1.74% math floor. "Functions ARE
+> its knowledge" is now a 2-expert ToMoC loop (fetch + compute). Trade-off: 1.7B
+> trains ~3x slower (59 min vs 18) and evals ~5x slower (49 min vs 9) on the P4,
+> but fits comfortably (4.2GB of 7.7GB). Cost totals ~$0.08 across 30 passes.
 > Details + per-pass cost in [runs.md](runs.md) and [wiki/JOURNAL.md](wiki/JOURNAL.md).
 
 ## Why smollm:135m is the pick
