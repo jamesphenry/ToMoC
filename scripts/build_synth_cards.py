@@ -312,9 +312,133 @@ def load_two_turn(n_runcode, n_lookup, seed=0):
     return cards
 
 
+# -------------------------------------------------------------------------
+# Type E (two-turn MISS) cards — Phase 7 lean fix: graceful KB-miss recovery.
+# On a resolver miss, run_question feeds back the literal MISS_RESULT string
+# (scripts/orchestrate.py run_question, miss branch). v8 was trained to ECHO
+# the tool result, so facing that non-numeric string it either echoes the text
+# or falls back to weak from-weights math and invents a number (the "wrong
+# operation" symptom James saw). A Type-E card supervises the MISS-branch
+# two-turn continuation with the SAME byte-identical mechanism as Type-D:
+# prompt_full mirrors orchestrate.build_turn2_prompt(t1, call, MISS_RESULT);
+# target = MISS_RESULT (echo honestly, do NOT guess). Covers BOTH miss flavors:
+# lookup-miss (question not in KB) and run_code-miss (sandbox rejected code).
 # --------------------------------------------------------------------------
+# MUST stay byte-identical to orchestrate.run_question's miss result_str.
+MISS_RESULT = "No answer found in the knowledge base."
+
+
+def _miss_two_turn_prompt(q, call):
+    """Mirror orchestrate.build_turn2_prompt on the MISS branch (result=MISS_RESULT)."""
+    t1 = _CUE + f"Question: {q}\nAnswer or call a tool:\n"
+    return f"{t1}{call.strip()}\nTool result: {MISS_RESULT}\nFinal answer:"
+
+
+def mk_E(q, call, src="synth.miss"):
+    """Build a Type E (miss-branch two-turn) card. Target is the honest miss
+    string, so loss on turn-2 teaches the model to echo it instead of guessing."""
+    return {"type": "E", "src": src, "q": q,
+            "prompt_full": _miss_two_turn_prompt(q, call),
+            "a": MISS_RESULT, "answer": MISS_RESULT}
+
+
+def load_miss_two_turn(n_lookup, n_runcode, seed=0):
+    cards = []
+    # lookup misses: questions the resolver can't answer -> echo miss string
+    added = 0
+    with open(GSM_TRAIN) as f:
+        for line in f:
+            if added >= n_lookup:
+                break
+            r = json.loads(line)
+            q = (r.get("prompt") or r.get("question") or "").strip()
+            if not q:
+                continue
+            qq = q
+            if len(qq) > MAX_Q:
+                qq = qq[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
+            cards.append(mk_E(qq, f'TOOL lookup query="{qq}"',
+                              src="synth.miss.lookup"))
+            added += 1
+    # run_code misses: code the sandbox rejects -> echo miss string
+    for q, code, ans in gen_arith(seed=seed + 2000, n=n_runcode):
+        cards.append(mk_E(q, f'TOOL run_code code="{code}"',
+                          src="synth.miss.runcode"))
+    return cards
+
+
+# -------------------------------------------------------------------------
+# Type F (show-your-work) cards — human-authored grade-1-3 word problems.
+# The user hand-annotates each with WORK (reasoning) + CODE (pure-arithmetic
+# expr) + A (gold numeric answer). The model is trained to EMIT the work, then
+# call run_code:  target = "<work> TOOL run_code code=\"<code>\""
+# This teaches operation disambiguation (the "more/fewer/left/altogether" ->
+# + - * / mapping) instead of guessing. Only NUMERIC rows live in the seed
+# file; symbolic rows (comparison / geometry / clock / algebra / yes-no) were
+# split out to f_cards_symbolic.txt (different schema) and are ignored here.
+# Non-arithmetic CODE (N/A / eval-fail) is skipped defensively.
+# -------------------------------------------------------------------------
+F_SEED = os.path.join(ROOT, "data", "raw", "f_cards_seed.txt")
+# cap the reasoning prefix so the full target fits the 256-token max-len
+MAX_WORK = 140
+
+
+def load_f_cards(n, seed=0):
+    """Parse f_cards_seed.txt into Type-F cards.
+
+    Keeps only blocks whose CODE eval()s to a plain number (the file is
+    already numeric-only after the split, but we defend against N/A / bad
+    code so a stray row can't train a wrong run_code call). Returns up to `n`.
+    """
+    text = open(F_SEED).read()
+    blocks, cur = [], {}
+    def flush(c):
+        if c.get("Q") is not None:
+            blocks.append(c)
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            flush(cur); cur = {}; continue
+        if s.startswith("#"):
+            continue
+        if s.startswith("Q:"):      cur["Q"] = s[2:].strip()
+        elif s.startswith("WORK:"): cur["WORK"] = s[5:].strip()
+        elif s.startswith("CODE:"): cur["CODE"] = s[5:].strip()
+        elif s.startswith("A:"):    cur["A"] = s[2:].strip()
+    flush(cur)
+
+    rng = random.Random(seed)
+    rng.shuffle(blocks)
+
+    cards = []
+    for b in blocks:
+        code = b["CODE"].strip()
+        if code == "" or code.upper() == "N/A":
+            continue
+        try:
+            val = eval(code, {"__builtins__": {}}, {})
+        except Exception:
+            continue
+        if not isinstance(val, (int, float)):
+            continue
+        work = b["WORK"].strip()
+        if len(work) > MAX_WORK:
+            work = work[:MAX_WORK - 1].rsplit(" ", 1)[0] + "…"
+        cards.append(mk_F(b["Q"].strip(), work, code, b["A"].strip()))
+        if len(cards) >= n:
+            break
+    return cards
+
+
+def mk_F(q, work, code, answer, src="f_cards_seed"):
+    """Type-F card: model narrates the work, then calls run_code."""
+    return {"type": "F", "src": src, "q": q, "answer": answer,
+            "a": f'{work} TOOL run_code code="{code}"'}
+
+
+# -------------------------------------------------------------------------
 # assemble
-# --------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out",
@@ -334,6 +458,18 @@ def main():
                     help="of --d, how many are run_code two-turn (rest: lookup)")
     ap.add_argument("--d-seed", type=int, default=0,
                     help="deterministic seed for the synthetic two-turn arithmetic")
+    ap.add_argument("--e", type=int, default=0,
+                    help="how many Type-E miss-branch two-turn cards to add "
+                         "[Phase 7 lean fix: graceful KB-miss recovery]")
+    ap.add_argument("--e-runcode", type=int, default=150,
+                    help="of --e, how many are run_code-miss (rest: lookup-miss)")
+    ap.add_argument("--e-seed", type=int, default=0,
+                    help="deterministic seed for the synthetic run_code-miss cards")
+    ap.add_argument("--f", type=int, default=0,
+                    help="how many Type-F (show-your-work) cards to draw from "
+                         "data/raw/f_cards_seed.txt [grade-1-3 word problems]")
+    ap.add_argument("--f-seed", type=int, default=0,
+                    help="deterministic seed for shuffling the Type-F seed file")
     args = ap.parse_args()
 
     a_gsm = load_gsm(args.gsm)
@@ -341,13 +477,18 @@ def main():
     c_cards = load_run_code(args.c, seed=args.c_seed)
     d_cards = load_two_turn(args.d_runcode, max(0, args.d - args.d_runcode),
                             seed=args.d_seed) if args.d else []
+    e_cards = load_miss_two_turn(max(0, args.e - args.e_runcode),
+                                 args.e_runcode, seed=args.e_seed) if args.e else []
+    f_cards = load_f_cards(args.f, seed=args.f_seed) if args.f else []
 
     A = a_gsm + a_eval
     B = b_eval[:args.b_cap]
     C = c_cards
     D = d_cards
+    E = e_cards
+    F = f_cards
 
-    cards = A + B + C + D
+    cards = A + B + C + D + E + F
     with open(args.out, "w") as f:
         for c in cards:
             f.write(json.dumps(c) + "\n")
@@ -361,6 +502,11 @@ def main():
           f"{sum(1 for x in D if 'runcode' in x.get('src',''))} "
           f"lookup={sum(1 for x in D if 'lookup' in x.get('src',''))} "
           f"seed={args.d_seed}]")
+    print(f"  Type E (miss-branch): {len(E)}  [run_code="
+          f"{sum(1 for x in E if 'runcode' in x.get('src',''))} "
+          f"lookup={sum(1 for x in E if 'lookup' in x.get('src',''))} "
+          f"seed={args.e_seed}]")
+    print(f"  Type F (show-work): {len(F)}  [f_cards_seed seed={args.f_seed}]")
     print("  A:B:C ratio =",
           round(len(A) / max(1, len(B)), 2), ":",
           round(len(B) / max(1, len(B)), 2), ":",

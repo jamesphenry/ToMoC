@@ -1,0 +1,530 @@
+Q: Ariel was playing basketball. 1 of her shots went in the hoop. 2 of her shots did not go in the hoop. How many shots were there in total?
+WORK: This is addition because we combine the shots that went in (1) with the shots that missed (2) to get a total, so 1 + 2.
+CODE: 1 + 2
+A: 3
+
+Q: Adrianna has 10 pieces of gum to share with her friends. There wasn't enough gum for all her friends, so she went to the store to get 3 more pieces of gum. How many pieces of gum does Adrianna have now?
+WORK: This is addition because she started with 10 and got 3 more, so we add to find how many now, 10 + 3.
+CODE: 10 + 3
+A: 13
+
+Q: The restaurant has 175 normal chairs and 20 chairs for babies. How many chairs does the restaurant have in total?
+WORK: This is addition because we combine the 175 normal chairs with the 20 baby chairs for a total, so 175 + 20.
+CODE: 175 + 20
+A: 195
+
+Q: Billy had 2 books at home. He went to the library to take out 2 more books. He then bought 1 book. How many books does Billy have now?
+WORK: This is addition of three amounts because we keep adding books he gets, so 2 + 2 + 1.
+CODE: 2 + 2 + 1
+A: 5
+
+Q: How many cookies did you sell if you sold 320 chocolate cookies and 270 vanilla cookies?
+WORK: This is addition because we combine the two kinds of cookies for a total, so 320 + 270.
+CODE: 320 + 270
+A: 590
+
+Q: There were 3 pizzas in total at the pizza shop. A customer bought 1 pizza. How many pizzas are left?
+WORK: This is subtraction because a pizza was taken away from the total, leaving fewer, so 3 - 1.
+CODE: 3 - 1
+A: 2
+
+Q: Your friend said she had 11 stickers. When you helped her clean her desk, she only had a total of 10 stickers. How many stickers are missing?
+WORK: This is subtraction because we compare what she said she had (11) with what is left (10) to find how many went missing, so 11 - 10.
+CODE: 11 - 10
+A: 1
+
+Q: Adrianna has 100 pieces of gum to share with her friends. When she went to the park, she shared 10 pieces of strawberry gum. When she left the park, Adrianna shared another 10 pieces of bubble gum. How many pieces of gum does Adrianna have now?
+WORK: This is subtraction of two amounts because she gave gum away twice, so we take both from 100, 100 - 10 - 10.
+CODE: 100 - 10 - 10
+A: 80
+
+Q: Nathan has a big ant farm. He decided to sell some of his ants. He started with 965 ants. He sold 213. How many ants does he have now?
+WORK: This is subtraction because ants were taken away from the starting amount, so 965 - 213.
+CODE: 965 - 213
+A: 752
+
+Q: Charlene had a pack of 35 pencil crayons. She gave 6 to her friend Theresa. She gave 3 to her friend Mandy. How many pencil crayons does Charlene have left?
+WORK: This is subtraction of two amounts because she gave crayons away twice, so 35 - 6 - 3.
+CODE: 35 - 6 - 3
+A: 26
+
+Q: Adrianna needs to cut a pan of brownies into pieces. She cuts 6 even columns and 3 even rows into the pan. How many brownies does she have?
+WORK: This is multiplication because the brownies form a grid of 6 columns and 3 rows, equal groups, so 6 * 3.
+CODE: 6 * 3
+A: 18
+
+Q: A movie theatre has 25 rows of seats with 20 seats in each row. How many seats are there in total?
+WORK: This is multiplication because there are 25 equal rows of 20 seats, so 25 * 20.
+CODE: 25 * 20
+A: 500
+
+Q: If you have 4 pieces of candy split evenly into 2 bags, how many pieces of candy are in each bag?
+WORK: This is division because 4 pieces are shared equally into 2 bags, so 4 / 2.
+CODE: 4 / 2
+A: 2
+
+Q: There are 235 books in a library. On Monday, 123 books are taken out. On Tuesday, 56 books are brought back. How many books are there now?
+WORK: This is mixed: first subtract the 123 taken out, then add the 56 brought back, so 235 - 123 + 56.
+CODE: 235 - 123 + 56
+A: 168
+
+Q: Adrianna has 10 pieces of gum to share with her friends. There wasn't enough gum for all her friends, so she went to the store and got 70 pieces of strawberry gum and 10 pieces of bubble gum. How many pieces of gum does Adrianna have now?
+WORK: This is addition of three amounts: start with 10, add 70, add 10, so 10 + 70 + 10.
+CODE: 10 + 70 + 10
+A: 90
+
+Q: The restaurant has 175 normal chairs and 20 chairs for babies. How many chairs does the restaurant have in total?
+WORK: This is addition because we combine the 175 normal chairs with the 20 baby chairs for a total, so 175 + 20.
+CODE: 175 + 20
+A: 195
+
+Q: How many cookies did you sell if you sold 320 chocolate cookies and 270 vanilla cookies?
+WORK: This is addition because we combine the two kinds of cookies for a total, so 320 + 270.
+CODE: 320 + 270
+A: 590
+
+Q: The hobby store normally sells 10,576 trading cards per month. In June, the hobby store sold 15,498 more trading cards than normal. In total, how many trading cards did the hobby store sell in June?
+WORK: This is addition because we add the normal amount to the extra sold, so 10576 + 15498.
+CODE: 10576 + 15498
+A: 26074
+
+Q: Ashley bought a big bag of candy. The bag had 102 blue candies, 100 red candies and 94 green candies. How many candies were there in total?
+WORK: This is addition of three amounts: blue + red + green, so 102 + 100 + 94.
+CODE: 102 + 100 + 94
+A: 296
+
+Q: Your team scored a total of 123 points. 67 points were scored in the first half. How many were scored in the second half?
+WORK: This is subtraction because the second-half points are what remains after the first half, so 123 - 67.
+CODE: 123 - 67
+A: 56
+
+Q: Nathan has a big ant farm. He decided to sell some of his ants. He started with 965 ants. He sold 213. How many ants does he have now?
+WORK: This is subtraction because ants were taken away from the starting amount, so 965 - 213.
+CODE: 965 - 213
+A: 752
+
+Q: The hobby store normally sells 10,576 trading cards per month. In July, the hobby store sold a total of 20,777 trading cards. How many more trading cards did the hobby store sell in July compared with a normal month?
+WORK: This is subtraction because we compare July's total to a normal month, so 20777 - 10576.
+CODE: 20777 - 10576
+A: 10201
+
+Q: Charlene had a pack of 35 pencil crayons. She gave 6 to her friend Theresa. She gave 3 to her friend Mandy. How many pencil crayons does Charlene have left?
+WORK: This is subtraction of two amounts because she gave crayons away twice, so 35 - 6 - 3.
+CODE: 35 - 6 - 3
+A: 26
+
+Q: Ashley bought a big bag of candy to share with her friends. In total, there were 296 candies. She gave 105 candies to Marissa. She also gave 86 candies to Kayla. How many candies were left?
+WORK: This is subtraction of two amounts because she gave candy to two friends, so 296 - 105 - 86.
+CODE: 296 - 105 - 86
+A: 105
+
+Q: Adrianna needs to cut a pan of brownies into pieces. She cuts 6 even columns and 3 even rows into the pan. How many brownies does she have?
+WORK: This is multiplication because the brownies form a grid of 6 columns and 3 rows, equal groups, so 6 * 3.
+CODE: 6 * 3
+A: 18
+
+Q: A movie theatre has 25 rows of seats with 20 seats in each row. How many seats are there in total?
+WORK: This is multiplication because there are 25 equal rows of 20 seats, so 25 * 20.
+CODE: 25 * 20
+A: 500
+
+Q: A clothing company has 4 different kinds of sweatshirts. Each year, the company makes 60,000 of each kind of sweatshirt. How many sweatshirts does the company make each year?
+WORK: This is multiplication because 4 kinds each made 60000 times, so 4 * 60000.
+CODE: 4 * 60000
+A: 240000
+
+Q: A bricklayer stacks bricks in 2 rows, with 10 bricks in each row. On top of each row, there is a stack of 6 bricks. How many bricks are there in total?
+WORK: This is mixed multiplication and addition: 2 rows of 10 plus a stack of 6 on top of each row, so 2 * 10 + 2 * 6.
+CODE: 2 * 10 + 2 * 6
+A: 32
+
+Q: Cayley earns $5 an hour by delivering newspapers. She delivers newspapers 3 days each week, for 4 hours at a time. After delivering newspapers for 8 weeks, how much money will Cayley earn?
+WORK: This is multiplication of three amounts: rate * hours per day * days per week * weeks, so 5 * 4 * 3 * 8.
+CODE: 5 * 4 * 3 * 8
+A: 480
+
+Q: If you have 4 pieces of candy split evenly into 2 bags, how many pieces of candy are in each bag?
+WORK: This is division because 4 pieces are shared equally into 2 bags, so 4 / 2.
+CODE: 4 / 2
+A: 2
+
+Q: If you have 80 tickets for the fair and each ride costs 5 tickets, how many rides can you go on?
+WORK: This is division because we split 80 tickets into groups of 5, so 80 / 5.
+CODE: 80 / 5
+A: 16
+
+Q: The school has $20,000 to buy new computer equipment. If each piece of equipment costs $50, how many pieces can the school buy in total?
+WORK: This is division because we split 20000 into groups of 50, so 20000 / 50.
+CODE: 20000 / 50
+A: 400
+
+Q: Melissa buys 2 packs of tennis balls for $12 in total. All together, there are 6 tennis balls. How much does 1 pack of tennis balls cost? How much does 1 tennis ball cost?
+WORK: This is division: total cost split into 2 packs, then balls split into 6, so 12 / 2 and 6 / 2.
+CODE: 12 / 2
+A: 6
+
+Q: An Italian restaurant receives a shipment of 86 veal cutlets. If it takes 3 cutlets to make a dish, how many cutlets will the restaurant have left over after making as many dishes as possible?
+WORK: This is division with a remainder: 86 cutlets in groups of 3, the leftover is the remainder, so 86 - (86 / 3) * 3.
+CODE: 86 - (86 / 3) * 3
+A: 2
+
+Q: There are 235 books in a library. On Monday, 123 books are taken out. On Tuesday, 56 books are brought back. How many books are there now?
+WORK: This is mixed: first subtract the 123 taken out, then add the 56 brought back, so 235 - 123 + 56.
+CODE: 235 - 123 + 56
+A: 168
+
+Q: Lana has 2 bags with 2 marbles in each bag. Markus has 2 bags with 3 marbles in each bag. How many more marbles does Markus have?
+WORK: This is multiplication then subtraction: Lana has 2*2, Markus has 2*3, find the difference, so 2 * 3 - 2 * 2.
+CODE: 2 * 3 - 2 * 2
+A: 2
+
+Q: Lana has 3 bags with the same amount of marbles in them, totaling 12 marbles. Markus has 3 bags with the same amount of marbles in them, totaling 18 marbles. How many more marbles does Markus have in each bag?
+WORK: This is division then subtraction: Lana 12/3 per bag, Markus 18/3 per bag, difference, so 18 / 3 - 12 / 3.
+CODE: 18 / 3 - 12 / 3
+A: 2
+
+Q: There are 2 chalkboards in your classroom. If each chalkboard needs 2 pieces of chalk, how many pieces do you need in total?
+WORK: This is multiplication because 2 chalkboards each need 2 pieces, so 2 * 2.
+CODE: 2 * 2
+A: 4
+
+Q: There are 3 chalkboards in your classroom. Each chalkboard has 2 pieces of chalk. This means there are 6 pieces of chalk in total. If you take 1 piece of chalk away from each chalkboard, how many will there be in total?
+WORK: This is multiplication then subtraction: 3 boards * 2 pieces, minus 1 taken from each of 3 boards, so 3 * 2 - 3 * 1.
+CODE: 3 * 2 - 3 * 1
+A: 3
+
+Q: What number is 6 tens and 10 ones?
+WORK: This is addition of place values: 6 tens is 60, 10 ones is 10, so 60 + 10.
+CODE: 60 + 10
+A: 70
+
+Q: I have a 7 in the tens place. I have an even number in the ones place. I am lower than 74. What number am I?
+WORK: This is number sense: a number in the 70s lower than 74 with an even ones digit is 72, so 72.
+CODE: 72
+A: 72
+
+Q: Julia went to 10 houses on her street for Halloween. 5 of the houses gave her a chocolate bar. What fraction of houses on Julia's street gave her a chocolate bar?
+WORK: This is fractions: 5 out of 10 houses, so the fraction is 5/10, which simplifies to 1/2.
+CODE: 5 / 10
+A: 0
+
+Q: Heather is painting a portrait of her best friend, Lisa. To make it easier, she divides the portrait into 6 equal parts. What fraction represents each part of the portrait?
+WORK: This is fractions: 1 portrait divided into 6 equal parts, each part is 1/6.
+CODE: 1 / 6
+A: 0
+
+Q: Noah walks 1/3 of a kilometre to school each day. He also walks 1/3 of a kilometre to get home after school. How many kilometres does he walk in total?
+WORK: This is adding fractions with like denominators: 1/3 + 1/3 = 2/3.
+CODE: 2 / 3
+A: 0
+
+Q: Last week, Whitney counted the number of juice boxes she had for school lunches. She had 3/5 of a case. This week, it's down to 1/5 of a case. How much of the case did Whitney drink?
+WORK: This is subtracting fractions with like denominators: 3/5 - 1/5 = 2/5.
+CODE: 3 / 5 - 1 / 5
+A: 0
+
+Q: At lunchtime, an ice cream parlor served 6 1/4 scoops of chocolate ice cream, 5 3/4 scoops of vanilla and 2 3/4 scoops of strawberry. How many scoops of ice cream did the parlor serve in total?
+WORK: This is adding mixed numbers: 6.25 + 5.75 + 2.75 scoops.
+CODE: 6.25 + 5.75 + 2.75
+A: 14.75
+
+Q: For a party, Jaime had 5 1/3 bottles of cola for her friends to drink. She drank 1/3 of a bottle herself. Her friends drank 3 1/3. How many bottles of cola does Jaime have left?
+WORK: This is subtracting mixed numbers: 5 + 1/3 - 1/3 - 3 - 1/3.
+CODE: 5 + 1/3 - 1/3 - 3 - 1/3
+A: 0
+
+Q: Kevin completed 1/2 of an assignment at school. When he was home that evening, he completed 5/6 of another assignment. How many assignments did Kevin complete?
+WORK: This is adding fractions with unlike denominators: 1/2 + 5/6 = 3/6 + 5/6 = 8/6 = 4/3.
+CODE: 1/2 + 5/6
+A: 0
+
+Q: Packing school lunches for her kids, Patty used 7/8 of a package of ham. She also used 1/2 of a package of turkey. How much more ham than turkey did Patty use?
+WORK: This is subtracting fractions with unlike denominators: 7/8 - 1/2 = 7/8 - 4/8 = 3/8.
+CODE: 7/8 - 1/2
+A: 0
+
+Q: During gym class on Wednesday, the students ran for 1/4 of a kilometre. On Thursday, they ran 1/2 as many kilometres as on Wednesday. How many kilometres did the students run on Thursday? Write your answer as a fraction.
+WORK: This is multiplying fractions: 1/4 * 1/2 = 1/8.
+CODE: 1/4 * 1/2
+A: 0
+
+Q: A clothing manufacturer uses 1/5 of a bottle of colour dye to make one pair of pants. The manufacturer used 4/5 of a bottle yesterday. How many pairs of pants did the manufacturer make?
+WORK: This is dividing fractions: (4/5) / (1/5) = 4.
+CODE: 4/5 / 1/5
+A: 0
+
+Q: Mark drank 5/6 of a carton of milk this week. Frank drank 7 times more milk than Mark. How many cartons of milk did Frank drink? Write your answer as a fraction, or as a whole or mixed number.
+WORK: This is multiplying a fraction by a whole number: 7 * 5/6 = 35/6 = 5 5/6.
+CODE: 7 * 5/6
+A: 0
+
+Q: You have 2.6 grams of yogurt in your bowl and you add another spoonful of 1.3 grams. How much yogurt do you have in total?
+WORK: This is adding decimals: 2.6 + 1.3.
+CODE: 2.6 + 1.3
+A: 3.9
+
+Q: Gemma had 25.75 grams of frosting to make a cake. She decided to use only 15.5 grams of the frosting. How much frosting does Gemma have left?
+WORK: This is subtracting decimals: 25.75 - 15.5.
+CODE: 25.75 - 15.5
+A: 10.25
+
+Q: Marshall walks a total of 0.9 kilometres to and from school each day. After 4 days, how many kilometres will he have walked?
+WORK: This is multiplying a decimal by a whole number: 0.9 * 4.
+CODE: 0.9 * 4
+A: 3.6
+
+Q: To make the Leaning Tower of Pisa from spaghetti, Mrs. Robinson bought 2.5 kilograms of spaghetti. Her students were able to make 10 leaning towers in total. How many kilograms of spaghetti does it take to make 1 leaning tower?
+WORK: This is dividing a decimal by a whole number: 2.5 / 10.
+CODE: 2.5 / 10
+A: 0.25
+
+Q: Rocco has 1.5 litres of orange soda and 2.25 litres of grape soda in his fridge. Antonio has 1.15 litres of orange soda and 0.62 litres of grape soda. How much more soda does Rocco have than Angelo?
+WORK: This is adding then subtracting decimals: Rocco 1.5+2.25, Antonio 1.15+0.62, difference.
+CODE: (1.5 + 2.25) - (1.15 + 0.62)
+A: 1.98
+
+Q: 4 days a week, Laura practices martial arts for 1.5 hours. Considering a week is 7 days, what is her average practice time per day each week?
+WORK: This is multiplication then division: 4 days * 1.5 hours, divided by 7 days.
+CODE: 4 * 1.5 / 7
+A: 0
+
+Q: There are 5 basketballs on the playground. There are 7 footballs on the playground. Are there more basketballs or footballs?
+WORK: This is comparing: 7 footballs > 5 basketballs, so more footballs.
+CODE: 7 - 5
+A: 2
+
+Q: Erik has 0 stickers. Every day he gets 1 more sticker. How many days until he gets 3 stickers?
+WORK: This is repeated addition / skip-counting: 3 stickers at 1 per day is 3 days.
+CODE: 3 / 1
+A: 3
+
+Q: Each month, Jeremy adds the same number of cards to his baseball card collection. In January, he had 36. 48 in February. 60 in March. How many baseball cards will Jeremy have in April?
+WORK: This is sequencing / skip-counting by 12: 36, 48, 60, next is 60 + 12.
+CODE: 60 + 12
+A: 72
+
+Q: Jeremy helped his mom for 1 hour. For how many minutes was he helping her?
+WORK: This is converting hours to minutes: 1 hour = 60 minutes.
+CODE: 1 * 60
+A: 60
+
+Q: Thomas and Matthew are saving up money to buy a video game together. Thomas has saved $30. Matthew has saved $35. How much money have they saved up together in total?
+WORK: This is adding money: 30 + 35.
+CODE: 30 + 35
+A: 65
+
+Q: Thomas has $80 saved up. He uses his money to buy a video game. The video game costs $67. How much money does he have left?
+WORK: This is subtracting money: 80 - 67.
+CODE: 80 - 67
+A: 13
+
+Q: Tim gets $5 for delivering the paper. How much money will he have after delivering the paper 3 times?
+WORK: This is multiplying money: 5 * 3.
+CODE: 5 * 3
+A: 15
+
+Q: Robert spent $184.59 to buy 3 hockey sticks. If each hockey stick was the same price, how much did 1 cost?
+WORK: This is dividing money with decimals: 184.59 / 3.
+CODE: 184.59 / 3
+A: 61.53
+
+Q: You went to the store and bought gum for $1.25 and a sucker for $0.50. How much was your total?
+WORK: This is adding money with decimals: 1.25 + 0.50.
+CODE: 1.25 + 0.50
+A: 1.75
+
+Q: You went to the store with $5.50. You bought gum for $1.25, a chocolate bar for $1.15 and a sucker for $0.50. How much money do you have left?
+WORK: This is subtracting money with decimals: 5.50 - 1.25 - 1.15 - 0.50.
+CODE: 5.50 - 1.25 - 1.15 - 0.50
+A: 2.6
+
+Q: Jakob wants to invite 20 friends to his birthday, which will cost his parents $250. If he decides to invite 15 friends instead, how much money will it cost his parents? Assume the relationship is directly proportional.
+WORK: This is proportional relationships: cost per friend is 250/20, times 15 friends.
+CODE: 250 / 20 * 15
+A: 187.5
+
+Q: Retta put $100.00 in a bank account that gains 20% interest annually. How much interest will be accumulated in 1 year? And if she makes no withdrawals, how much money will be in the account after 1 year?
+WORK: This is percentages: 20% of 100 is 0.20 * 100 interest, total is 100 + that.
+CODE: 100 * 0.20
+A: 20.0
+
+Q: Cassandra's ruler is 22 centimetres long. April's ruler is 30 centimetres long. How many centimetres longer is April's ruler?
+WORK: This is comparing measurements by subtraction: 30 - 22.
+CODE: 30 - 22
+A: 8
+
+Q: Micha's dad wants to try to save money on gas, so he has been tracking how much he uses. Last year, Micha's dad used 100 litres of gas. This year, her dad used 90 litres of gas. How much gas did he use in total for the two years?
+WORK: This is adding measurements: 100 + 90.
+CODE: 100 + 90
+A: 190
+
+Q: Micha's dad wants to try to save money on gas, so he has been tracking how much he uses. Over the past two years, Micha's dad used 200 litres of gas. This year, he used 100 litres of gas. How much gas did he use last year?
+WORK: This is subtracting measurements: 200 - 100.
+CODE: 200 - 100
+A: 100
+
+Q: Kiera wants to make sure she has strong bones, so she drinks 2 litres of milk every week. After 3 weeks, how many litres of milk will Kiera drink?
+WORK: This is multiplying volume: 2 * 3.
+CODE: 2 * 3
+A: 6
+
+Q: Lillian is doing some gardening, so she bought 1 kilogram of soil. She wants to spread the soil evenly between her 2 plants. How much will each plant get?
+WORK: This is dividing mass: 1 / 2.
+CODE: 1 / 2
+A: 0
+
+Q: Inger goes to the grocery store and buys 3 squashes that each weigh 500 grams. How many kilograms of squash did Inger buy?
+WORK: This is multiplying then converting grams to kilograms: 3 * 500 grams = 1500 grams = 1.5 kg.
+CODE: 3 * 500 / 1000
+A: 1.5
+
+Q: Shad has a lemonade stand and sold 20 cups of lemonade. Each cup was 500 millilitres. How many litres did Shad sell in total?
+WORK: This is multiplying then converting millilitres to litres: 20 * 500 ml = 10000 ml = 10 L.
+CODE: 20 * 500 / 1000
+A: 10.0
+
+Q: Stacy and Milda are comparing their heights. Stacy is 1.5 meters tall. Milda is 10 centimetres taller than Stacy. What is Milda's height in centimetres?
+WORK: This is converting then adding: 1.5 m = 150 cm, plus 10 cm.
+CODE: 1.5 * 100 + 10
+A: 160.0
+
+Q: A bus leaves the school to take students on a field trip. The bus travels 10 kilometres south, 10 kilometres west, another 5 kilometres south and 15 kilometres north. To return to the school, in which direction does the bus have to travel? How many kilometres must it travel in that direction?
+WORK: This is direction and net distance: net south = 10+5=15, net north = 15, so north/south cancel; net west = 10. Must travel east 10 km. Answer is east 10.
+CODE: 10
+A: 10
+
+Q: The ratio of Jenny's trophies to Meredith's trophies is 7:4. Jenny has 28 trophies. How many does Meredith have?
+WORK: This is ratios: 7 parts = 28, so 1 part = 4, Meredith has 4 parts = 16.
+CODE: 28 / 7 * 4
+A: 16
+
+Q: The ratio of Jenny's trophies to Meredith's trophies is 7:4. The difference between the numbers is 12. What are the numbers?
+WORK: This is ratios with a difference: 3 parts = 12, so 1 part = 4; numbers are 7*4 and 4*4.
+CODE: 12 / 3 * 7
+A: 28
+
+Q: The school's junior band has 10 saxophone players and 20 trumpet players. The school's senior band has 18 saxophone players and 29 trumpet players. Which band has the higher ratio of trumpet to saxophone players?
+WORK: This is comparing ratios: junior 20/10=2.0, senior 29/18≈1.61, so junior is higher.
+CODE: 20 / 10
+A: 2
+
+Q: A decade ago, Oakville's population was 67,624 people. Now, it is 190% larger. What is Oakville's current population?
+WORK: This is percent of change: 67624 * (1 + 1.90).
+CODE: 67624 * (1 + 1.90)
+A: 0
+
+Q: At the ice skate rental stand, 60% of 120 skates are for boys. If the rest of the skates are for girls, how many are there?
+WORK: This is percents of numbers: 60% of 120 = 0.60 * 120.
+CODE: 120 * 0.60
+A: 72.0
+
+Q: For 4 weeks, William volunteered as a helper for swimming classes. The first week, he volunteered for 8 hours. He volunteered for 12 hours in the second week, and another 12 hours in the third week. The fourth week, he volunteered for 9 hours. For how many hours did he volunteer per week, on average?
+WORK: This is calculating averages: (8 + 12 + 12 + 9) / 4.
+CODE: (8 + 12 + 12 + 9) / 4
+A: 10.25
+
+Q: The faces on a fair number die are labelled 1, 2, 3, 4, 5 and 6. You roll the die 12 times. How many times should you expect to roll a 1?
+WORK: This is tangible probability: 1/6 chance per roll * 12 rolls = 2.
+CODE: 12 / 6
+A: 2
+
+Q: The numbers 1 to 50 are in a hat. If the probability of drawing an even number is 25/50, what is the probability of NOT drawing an even number? Express this probability as a fraction.
+WORK: This is complementary events: 1 - 25/50 = 25/50 = 1/2.
+CODE: 1 - 25 / 50
+A: 0
+
+Q: A pizza shop has recently sold 15 pizzas. 5 of those pizzas were pepperoni. Answering with a fraction, what is the experimental probability that the next pizza will be pepperoni?
+WORK: This is experimental probability: 5 pepperoni out of 15 = 5/15 = 1/3.
+CODE: 5 / 15
+A: 0
+
+Q: Maurita and Felice each take 4 tests. Here are the results of Maurita's 4 tests: 4, 4, 4, 4. Here are the results for 3 of Felice's 4 tests: 3, 3, 3. If Maurita's mean for the 4 tests is 1 point higher than Felice's, what's the score of Felice's 4th test?
+WORK: This is data relationships: Maurita mean = 4, so Felice mean = 3, Felice total = 12, 4th = 12 - 3 - 3 - 3.
+CODE: 3 * 4 - (3 + 3 + 3)
+A: 3
+
+Q: Store A is selling 7 pounds of bananas for $7.00. Store B is selling 3 pounds of bananas for $6.00. Which store has the better deal?
+WORK: This is proportional relationships: A is 7/7 = $1/lb, B is 6/3 = $2/lb, so A is cheaper.
+CODE: 7 / 7
+A: 1
+
+Q: Lionel loves soccer, but has trouble motivating himself to practice. So, he incentivizes himself through video games. There is a proportional relationship between the amount of drills Lionel completes, in x, and for how many hours he plays video games, in y. When Lionel completes 10 drills, he plays video games for 30 minutes. Write the equation for the relationship between x and y.
+WORK: This is writing equations for proportional relationships: y = (30/10) * x = 3x. Answer is an equation.
+CODE: 30 / 10
+A: 3
+
+Q: The theatre has 4 chairs in a row. There are 5 rows. Using rows as your unit of measurement, what is the perimeter?
+WORK: This is perimeter of a grid in row-units: 2*(rows + chairs per row) = 2*(5 + 4).
+CODE: 2 * (5 + 4)
+A: 18
+
+Q: The theatre has 4 chairs in a row. There are 5 rows. How many chairs are there in total?
+WORK: This is area as multiplication: 4 chairs per row * 5 rows.
+CODE: 4 * 5
+A: 20
+
+Q: Aaron wants to know how much candy his container can hold. The container is 20 centimetres tall, 10 centimetres long and 10 centimetres wide. What is the container's volume?
+WORK: This is volume: 20 * 10 * 10.
+CODE: 20 * 10 * 10
+A: 2000
+
+Q: Mitchell wrote his homework questions on a piece of square paper. Each side of the paper is 8 centimetres. What is the perimeter?
+WORK: This is perimeter of a square: 4 * 8.
+CODE: 4 * 8
+A: 32
+
+Q: A single trading card is 9 centimetres long by 6 centimetres wide. What is its area?
+WORK: This is area of a rectangle: 9 * 6.
+CODE: 9 * 6
+A: 54
+
+Q: What is the surface area of a cube that has a width of 2cm, height of 2 cm and length of 2 cm?
+WORK: This is surface area of a cube: 6 faces * (2 * 2).
+CODE: 6 * (2 * 2)
+A: 24
+
+Q: Aaron's candy container is 20 centimetres tall, 10 centimetres long and 10 centimetres wide. Bruce's container is 25 centimetres tall, 9 centimetres long and 9 centimetres wide. Find the volume of each container. Based on volume, whose container can hold more candy?
+WORK: This is volume of two boxes: Aaron 20*10*10, Bruce 25*9*9, compare.
+CODE: 20 * 10 * 10
+A: 2000
+
+Q: A triangle has the following side lengths: 3 cm, 4 cm and 5 cm. Is this triangle a right-angled triangle?
+WORK: This is right-angled triangles: 3^2 + 4^2 = 5^2 (9+16=25), so yes it is right-angled.
+CODE: 3 * 3 + 4 * 4
+A: 25
+
+Q: Luigi built a tent in the shape of an equilateral triangle. The perimeter is 21 metres. What is the length of each of the tent's sides?
+WORK: This is perimeter of a triangle: 21 / 3.
+CODE: 21 / 3
+A: 7
+
+Q: What is the area of a triangle with a base of 2 units and a height of 3 units?
+WORK: This is area of a triangle: (base * height) / 2 = (2 * 3) / 2.
+CODE: 2 * 3 / 2
+A: 3
+
+Q: A right triangle has one non-hypotenuse side length of 3 inches and the hypotenuse measures 5 inches. What is the length of the other non-hypotenuse side?
+WORK: This is Pythagorean theorem: sqrt(5^2 - 3^2) = sqrt(25 - 9) = sqrt(16) = 4.
+CODE: (5 * 5 - 3 * 3) ** 0.5
+A: 4.0
+
+Q: Jasmin bought a new round backpack. Its area is 370 square centimetres. What is the round backpack's diameter?
+WORK: This is a circle's diameter from area: d = 2*sqrt(area/pi) = 2*sqrt(370/3.14159).
+CODE: 2 * (370 / 3.14159) ** 0.5
+A: 0
+
+Q: Captain America's circular shield has a diameter of 76.2 centimetres. What is the area of his shield?
+WORK: This is a circle's area: pi * (d/2)^2 = 3.14159 * (76.2/2)^2.
+CODE: 3.14159 * (76.2 / 2) * (76.2 / 2)
+A: 0
+
+Q: Skylar lives on a farm, where his dad keeps a circular corn maze. The corn maze has a diameter of 2 kilometres. What is the maze's radius?
+WORK: This is a circle's radius: diameter / 2 = 2 / 2.
+CODE: 2 / 2
+A: 1
+
+Q: Victoria is baking muffins for her class. The number of muffins she makes is based on how many classmates she has. For this equation, m is the number of muffins and c is the number of classmates. Which variable is independent and which variable is dependent?
+WORK: This is independent vs dependent variables: classmates (c) is independent, muffins (m) depends on it. Answer is variable roles.
+CODE: 0
+A: 0
+

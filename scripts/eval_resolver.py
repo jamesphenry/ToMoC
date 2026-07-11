@@ -58,6 +58,42 @@ def norm_numeric(s):
     return float(nums[-1]) if nums else None
 
 
+# --- router-quality: does it pick the RIGHT expert for the question type? ---
+# Gold-labeled on flashcards (each card has a ground-truth `type`); heuristic on
+# gsm8k (approximate — a question that looks arithmetic should route to run_code,
+# otherwise lookup). This is a *different* question from "did it call": it asks
+# which capability the router dispatched to, and whether that was the correct one.
+_ARITH_EXPR = re.compile(r"\d+\s*[\+\-\*x×/]\s*\d+")
+_ARITH_WORDS = re.compile(
+    r"\b(add|subtract|multiply|divide|total|sum|difference|product|times|"
+    r"plus|minus|how many|each|per |percent|average|double|triple)\b", re.I)
+
+
+def heuristic_expected_tool(q):
+    """Approximate: explicit arithmetic or arithmetic words -> run_code else lookup.
+    Clearly labeled APPROXIMATE in output; do not treat as gold."""
+    if _ARITH_EXPR.search(q) or _ARITH_WORDS.search(q):
+        return "run_code"
+    return "lookup"
+
+
+def expected_tool_for(rec, dataset_kind):
+    """Return (expected_tool | None, label) where None means 'answer directly'.
+    label is 'gold' (flashcard A/B/C) or 'heuristic' (gsm8k)."""
+    if dataset_kind == "flashcard":
+        t = rec.get("type")
+        if t == "A":
+            return "lookup", "gold"
+        if t == "C":
+            return "run_code", "gold"
+        if t == "B":
+            return None, "gold"
+        return None, "skip"          # D/E/F are two-turn; exclude from router score
+    # gsm8k / mmlu: heuristic only
+    q = rec.get("prompt") or rec.get("q") or ""
+    return heuristic_expected_tool(q), "heuristic"
+
+
 def gold_for(rec, dataset_kind):
     """Pull the gold answer + question from a dataset record."""
     if dataset_kind == "gsm8k":
@@ -117,13 +153,44 @@ def main():
     correct = 0                 # resolved answer matched gold
     total_gold = 0              # rows that HAVE a gold answer to score
 
+    # router-quality counters (which expert did it pick? was it the right one?)
+    rt_total_calls = 0          # calls that SHOULD have been a tool (excludes over-call)
+    rt_correct_tool = 0         # call dispatched to the correct expert
+    rt_false_tool = 0           # called, but wrong expert (lookup<->run_code swap)
+    rt_over_call = 0            # called when it should have answered directly (B)
+    rt_should_call = 0          # rows that should have called a tool (A/C)
+    rt_missed_tool = 0          # should have called but answered directly
+    rt_scored = 0               # rows included in router-quality (excludes skip/D/E/F)
+    rt_label = "gold" if args.kind == "flashcard" else "heuristic (approx)"
+
     with open(log_path, "w") as lf:
-        for i, (q, out, gold) in enumerate(zip(questions, outputs, golds)):
+        for i, (r, q, out, gold) in enumerate(zip(rows, questions, outputs, golds)):
             called, tool, query, wf = parse_call(out)
+            exp_tool, exp_label = expected_tool_for(r, args.kind)
             rec = {"i": i, "q": q, "raw_output": out.strip(),
                    "called": called, "tool": tool, "query": query,
                    "well_formed": wf, "gold": gold,
+                   "expected_tool": exp_tool, "expected_label": exp_label,
                    "resolved": None, "correct": None}
+            # --- router-quality accumulation ---
+            if exp_label != "skip":
+                rt_scored += 1
+                if exp_tool in ("lookup", "run_code"):
+                    rt_should_call += 1
+                if called:
+                    if exp_tool is None:
+                        rt_over_call += 1          # B-type: shouldn't have called
+                    else:
+                        rt_total_calls += 1
+                        if tool == exp_tool:
+                            rt_correct_tool += 1
+                        else:
+                            rt_false_tool += 1
+                else:  # not called
+                    if exp_tool in ("lookup", "run_code"):
+                        rt_missed_tool += 1
+            rec["router_ok"] = (called and exp_tool is not None and tool == exp_tool)
+            # --- end router-quality ---
             if called:
                 called_should += 1
                 if wf:
@@ -152,6 +219,16 @@ def main():
         print(f"  correct_vs_gold            : {correct}/{total_gold} = {correct/total_gold:.3f}")
     else:
         print("  correct_vs_gold            : no gold to score (set --kind with gold)")
+    # router-quality (which expert did it pick? was it the right one?)
+    if rt_scored:
+        prec = rt_correct_tool / rt_total_calls if rt_total_calls else 0.0
+        rec_ = rt_correct_tool / rt_should_call if rt_should_call else 0.0
+        print(f"\n  -- router quality ({rt_label}) --")
+        print(f"  router_precision          : {rt_correct_tool}/{rt_total_calls} = {prec:.3f}")
+        print(f"  router_recall             : {rt_correct_tool}/{rt_should_call} = {rec_:.3f}")
+        print(f"  false_tool (wrong expert) : {rt_false_tool}")
+        print(f"  missed_tool (should call) : {rt_missed_tool}")
+        print(f"  over_call (should answer) : {rt_over_call}")
     print(f"  walltime_s                 : {wall:.1f}")
     print(f"  full log                   : {log_path}")
 
@@ -169,6 +246,15 @@ def main():
                       round(resolved_hit / called_should, 4) if called_should else 0.0)
         if total_gold:
             db.log_metric(pid, "correct_vs_gold", round(correct / total_gold, 4))
+        if rt_scored:
+            db.log_metric(pid, "router_precision",
+                          round(rt_correct_tool / rt_total_calls, 4) if rt_total_calls else 0.0)
+            db.log_metric(pid, "router_recall",
+                          round(rt_correct_tool / rt_should_call, 4) if rt_should_call else 0.0)
+            db.log_metric(pid, "false_tool", rt_false_tool)
+            db.log_metric(pid, "missed_tool", rt_missed_tool)
+            db.log_metric(pid, "over_call", rt_over_call)
+            db.log_meta(pid, "router_label", rt_label)
         db.log_meta(pid, "run_type", "adapter")
         db.log_meta(pid, "data", os.path.basename(args.data))
         db.log_meta(pid, "log", log_path)

@@ -53,7 +53,9 @@ from eval_toolcall import Engine, format_prompt, parse_call
 from tool_resolver import resolve, KB
 
 DEFAULT_MODEL = os.path.join(ROOT, "adapters", "v8")
-MAX_NEW = 64          # turn-1 / turn-2 continuation budget
+MAX_NEW = 160         # turn-1 / turn-2 continuation budget; 160 (was 64) so a
+                       # show-your-work prefix (Type-F) can precede the TOOL call
+                       # without being truncated mid-code (BUG-008 class).
 CHUNK = 16            # batched forward chunk (BUG-007)
 
 

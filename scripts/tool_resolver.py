@@ -207,6 +207,13 @@ def resolve(tool: str, query: str, kb: KB = None):
     if tool == "lookup":
         return kb.resolve(query)
     if tool == "run_code":
+        # Guard: a run_code call with empty/None/non-string code must not reach
+        # ast.parse (compile(None) crashes). Model sometimes emits
+        # `TOOL run_code code=""` (truncated/empty) -> treat as a miss, not a crash.
+        if not isinstance(query, str) or not query.strip():
+            return {"verdict": "miss", "answer": None,
+                    "matched": None, "method": "run_code",
+                    "error": "empty code argument"}
         try:
             from sandbox import run as _run
         except Exception as e:
