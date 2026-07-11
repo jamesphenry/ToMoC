@@ -160,7 +160,33 @@ def main():
             pass
         print(f"smol ToMoC playground — model={args.model}")
         print("type a question, 'quit'/'exit' to leave. The model will call a "
-              "tool, get the result, then answer.\n")
+              "tool, get the result, then answer.")
+        print("  /export [path]  save this conversation as markdown")
+        print("  /mark <n> <seen|fixed>  mark a turn's review status\n")
+        transcript = []  # each: dict(q, call, verdict, result, final)
+
+        def render_md(path, turns, model):
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            out = [f"# smol ToMoC conversation", "",
+                   f"- model: `{model}`", f"- exported: {ts}",
+                   f"- turns: {len(turns)}", ""]
+            for i, t in enumerate(turns, 1):
+                out.append(f"## Turn {i}  _[status: {t.get('status','new')}]_")
+                out.append("")
+                out.append(f"**You:** {t['q']}")
+                out.append("")
+                out.append(f"**Model (turn-1 call):** `{t['call']}`")
+                if t.get("verdict") is not None:
+                    out.append(f"**Tool:** {t['verdict']}"
+                               + (f" → `{t['result']}`" if t.get("result") is not None else ""))
+                out.append(f"**Final answer:** {t['final']}")
+                out.append("")
+            out.append("---")
+            out.append("_Exported by orchestrate.py --chat. Edit the `[status: ...]` "
+                       "tags to seen/fixed and share back for review._")
+            with open(path, "w") as f:
+                f.write("\n".join(out) + "\n")
+
         while True:
             try:
                 q = input("you> ").strip()
@@ -169,11 +195,48 @@ def main():
                 break
             if not q:
                 continue
-            if q.lower() in ("quit", "exit", "q"):
+            low = q.lower()
+            if low in ("quit", "exit", "q"):
                 print("bye")
                 break
+            # slash commands
+            if q.startswith("/export"):
+                parts = q.split()
+                path = parts[1] if len(parts) > 1 else \
+                    os.path.join(ROOT, "logs", "chat_export.md")
+                render_md(path, transcript, args.model)
+                print(f"  exported {len(transcript)} turns -> {path}")
+                continue
+            if q.startswith("/mark"):
+                parts = q.split()
+                if len(parts) >= 3 and parts[1].isdigit():
+                    idx = int(parts[1]) - 1
+                    if 0 <= idx < len(transcript):
+                        transcript[idx]["status"] = parts[2]
+                        print(f"  turn {parts[1]} -> {parts[2]}")
+                    else:
+                        print("  no such turn")
+                else:
+                    print("  usage: /mark <n> <seen|fixed>")
+                continue
             rec = run_question(engine, kb, q, None, verbose=True)
             print(f"answer> {rec['final_answer']}\n")
+            transcript.append({
+                "q": q,
+                "call": rec["turn1"],
+                "verdict": (rec["resolved"].get("verdict")
+                            if rec.get("resolved") else None),
+                "result": (rec["resolved"].get("answer")
+                           if rec.get("resolved") and
+                           rec["resolved"].get("verdict") == "hit" else None),
+                "final": rec["final_answer"],
+                "status": "new",
+            })
+        # auto-save on exit (non-destructive: only writes if we had turns)
+        if transcript:
+            auto = os.path.join(ROOT, "logs", "chat_last.md")
+            render_md(auto, transcript, args.model)
+            print(f"  auto-saved last session -> {auto}")
         return
 
     if args.ask:

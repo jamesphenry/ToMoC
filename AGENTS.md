@@ -170,7 +170,10 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # live single-question ToMoC loop:
 python -u scripts/orchestrate.py --model adapters/v8 --ask "48 - 5 + 20"
 # NEW: interactive playground (no Ollama; sovereign HF engine only) —
-#   type a question, watch turn1 call -> tool result -> final answer:
+#   type a question, watch turn1 call -> tool result -> final answer.
+#   /export [path] saves the conversation as markdown (per-turn status field
+#   you/assistant can flip to seen|fixed for review); auto-saves to
+#   logs/chat_last.md on quit. /mark <n> <seen|fixed> marks a turn.
 python -u scripts/orchestrate.py --chat
 # batched end-to-end final-answer scoring:
 python -u scripts/orchestrate.py --model adapters/v8 \
