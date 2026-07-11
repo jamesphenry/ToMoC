@@ -217,7 +217,8 @@ def main():
             if not q:
                 continue
             low = q.lower()
-            if low in ("quit", "exit", "q"):
+            # exit: bare word or slash form (don't ctrl-c)
+            if low in ("quit", "exit", "q", "/quit", "/exit", "/bye"):
                 print("bye")
                 break
             # slash commands

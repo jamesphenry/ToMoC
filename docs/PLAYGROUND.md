@@ -51,7 +51,7 @@ you> A baker made 3 trays of 12 cookies each. How many cookies?
 
 | command | what it does |
 |---------|--------------|
-| `quit` / `exit` / `q` | leave; auto-saves the session (see below) |
+| `quit` / `exit` / `q` / `/quit` / `/exit` / `/bye` | leave; auto-saves the session (see below). Slash form added so you don't need ctrl-c. |
 | `/export [path]` | write the whole conversation as markdown. Defaults to `logs/chat_export.md`. Pass a path to choose your own (e.g. `/export /tmp/session1.md`). |
 | `/mark <n> <seen|fixed>` | flip turn `n`'s review status tag. Used for the share-and-review handoff. |
 
@@ -110,6 +110,24 @@ lost even if you forget `/export`.
 
 The playground is a thin REPL over the verified orchestration loop — it adds
 no model behavior, it only makes the existing ToMoC loop talkable.
+
+## Known limitation: KB-miss recovery
+
+When a question is **not in the knowledge base**, the resolver can't answer and
+`run_question` feeds back the literal string *"No answer found in the knowledge
+base."* The 360m adapter was trained to **echo** the tool result, so facing a
+non-numeric string it either echoes that text or guesses from its weak weights
+— which can produce a wrong number (and thus look like the "wrong operation").
+
+Measured on the gsm8k eval logs: lookup misses dominate (~370 rows), and among
+tool-call misses the chosen operator is **not** skewed to multiplication
+(addition 320×, multiplication only 196× across all calls; multiplication just 6
+of the misses). So there is **no** "prefers to multiply" bias — the symptom is
+really *poor recovery on a KB miss*, not an arithmetic preference.
+
+**Not yet fixed** (would need either a retrain on miss-recovery cards, or a
+graceful-miss prompt that tells the model to answer from its own reasoning).
+Tracked as a future improvement; see the share-and-review loop above.
 
 ## Related
 
