@@ -34,6 +34,9 @@ CALL_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)"', re.DOTALL)
 # truncated by max_new_tokens before the closing quote arrived. We still count it
 # well-formed — the format intent is unambiguous (see BUG-008).
 CALL_OPEN_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)', re.DOTALL)
+# run_code form (Phase 5): TOOL run_code code="<expr>"
+RUNCODE_RE = re.compile(r'TOOL\s+run_code\s+code="(.*)"', re.DOTALL)
+RUNCODE_OPEN_RE = re.compile(r'TOOL\s+run_code\s+code="(.*)', re.DOTALL)
 # looser first-pass detector: did it emit anything resembling a TOOL line?
 TOOL_HINT_RE = re.compile(r'TOOL\s+(\w+)', re.IGNORECASE)
 
@@ -156,7 +159,11 @@ def format_prompt(card):
 
 
 def parse_call(text):
-    """Return (called: bool, tool: str|None, query: str|None, well_formed: bool)."""
+    """Return (called: bool, tool: str|None, query: str|None, well_formed: bool).
+
+    tool is 'lookup', 'run_code', or whatever TOOL name was emitted.
+    For run_code, `query` carries the code payload (same slot, reused).
+    """
     m = CALL_RE.search(text)
     if m:
         return True, "lookup", m.group(1), True
@@ -165,6 +172,13 @@ def parse_call(text):
     m2 = CALL_OPEN_RE.search(text)
     if m2:
         return True, "lookup", m2.group(1), True
+    # run_code form
+    m3 = RUNCODE_RE.search(text)
+    if m3:
+        return True, "run_code", m3.group(1), True
+    m4 = RUNCODE_OPEN_RE.search(text)
+    if m4:
+        return True, "run_code", m4.group(1), True
     hint = TOOL_HINT_RE.search(text)
     if hint:
         # emitted a TOOL line but not well-formed
@@ -175,34 +189,47 @@ def parse_call(text):
 def evaluate(engine, cards, verbose=False, log_path=None):
     a_cards = [c for c in cards if c["type"] == "A"]
     b_cards = [c for c in cards if c["type"] == "B"]
+    c_cards = [c for c in cards if c["type"] == "C"]
     stats = {"A_total": len(a_cards), "B_total": len(b_cards),
+             "C_total": len(c_cards),
              "A_called": 0, "A_wellformed": 0, "A_correct_tool": 0,
-             "B_called": 0, "B_wellformed": 0}
+             "B_called": 0, "B_wellformed": 0,
+             "C_called": 0, "C_run_code": 0, "C_wellformed": 0}
 
-    all_cards = a_cards + b_cards
+    all_cards = a_cards + b_cards + c_cards
     total = len(all_cards)
     prompts = [format_prompt(c) for c in all_cards]
     # ONE batched forward pass (was 60 separate calls -> 100% CPU / 12% GPU).
     outputs = engine.generate_all(prompts)
     log_f = open(log_path, "w") if log_path else None
     for i, (card, out) in enumerate(zip(all_cards, outputs)):
-        is_A = card["type"] == "A"
+        t = card["type"]
         called, tool, query, wf = parse_call(out)
-        if is_A:
+        if t == "A":
             stats["A_called"] += int(called)
             stats["A_wellformed"] += int(called and wf)
             stats["A_correct_tool"] += int(called and tool == "lookup")
-        else:
+        elif t == "B":
             stats["B_called"] += int(called)
             stats["B_wellformed"] += int(called and wf)
+        else:  # Type C (run_code)
+            if called and tool == "run_code":
+                stats["C_called"] += 1
+                stats["C_run_code"] += 1
+                stats["C_wellformed"] += int(wf)
+            elif called and tool == "lookup":
+                # misrouted: should have computed, not looked up
+                stats["C_called"] += 1
+            elif called:
+                stats["C_called"] += 1
         if verbose:
-            tag = "A" if is_A else "B"
+            tag = t
             print(f"[{tag}] called={called} tool={tool} wf={wf}")
             print(f"    Q: {card['q'][:70]}")
             print(f"    -> {out.strip()[:80]!r}\n")
         if log_f:
             log_f.write(json.dumps({
-                "i": i, "type": "A" if is_A else "B",
+                "i": i, "type": t,
                 "q": card.get("q"), "raw_output": out.strip(),
                 "called": called, "tool": tool, "query": query,
                 "well_formed": wf,
@@ -220,6 +247,10 @@ def evaluate(engine, cards, verbose=False, log_path=None):
                                         if stats["A_called"] else 0.0)
     if stats["B_total"]:
         metrics["over_call_rate"] = stats["B_called"] / stats["B_total"]
+    if stats["C_total"]:
+        metrics["run_code_rate"] = stats["C_run_code"] / stats["C_total"]
+        metrics["run_code_well_formed_rate"] = (
+            stats["C_wellformed"] / stats["C_total"] if stats["C_total"] else 0.0)
     return metrics, stats
 
 

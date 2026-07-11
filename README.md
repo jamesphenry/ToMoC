@@ -1,7 +1,7 @@
-> ## 🔌 Sovereign compute cost so far: **$0.0196**
-> 13 training/eval passes · 1.55 GPU-hrs · 14¢/kWh · ~90W over server idle
+> ## 🔌 Sovereign compute cost so far: **$0.0274**
+> 17 training/eval passes · 2.17 GPU-hrs · 14¢/kWh · ~90W over server idle
 > Refresh live: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
-> _Sovereign intelligence is cheap — this whole lab cost less than 2 cents of electricity._
+> _Sovereign intelligence is cheap — this whole lab cost less than 3 cents of electricity._
 ---
 
 # smol-lab
@@ -11,8 +11,8 @@
 > function with the right argument. The functions ARE its knowledge.
 > Everything here is experimental, fast-and-loose, villain-coded.
 
-> 🔌 **Total electricity cost so far: $0.0196** across 13 training/eval passes
-> (1.55 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
+> 🔌 **Total electricity cost so far: $0.0274** across 17 training/eval passes
+> (2.17 GPU-hrs @ 14¢/kWh, ~90W over server idle). Sovereign compute is cheap.
 > Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 
 ## The thesis
@@ -74,11 +74,14 @@ qwen2.5:1.5b is the notable control: it scores well AND supports Ollama tools
 natively (smolLM doesn't) — useful as a comparison for whether our LoRA
 adapter matches native behavior.
 
-> 🏆 **Headline result (smolLM:135m + LoRA v3 + sovereign KB resolver):**
-> on gsm8k_test math, the base model solves **1.74%** on its own. With the
-> lookup habit + `tool_resolver.py` (8892 on-disk entries, zero external APIs)
-> it resolves **97.2% correct** end-to-end (call_rate 0.992, well_formed 1.000).
-> "Functions ARE its knowledge" is now a working loop, not a slogan.
+> 🏆 **Headline result (smolLM:135m + LoRA v4 + sovereign resolver):** on gsm8k_test
+> math the base model solves **1.74%** alone. With the lookup habit + `tool_resolver.py`
+> (8892 on-disk entries, zero external APIs) it resolves **98.4% correct** end-to-end
+> (call_rate 0.995, well_formed 0.999). The model also learned a SECOND tool:
+> `run_code` — it emits `TOOL run_code code="..."` and a sandboxed executor
+> (`scripts/sandbox.py`) **computes** the answer: **94.7% correct** (142/150) on
+> synthetic arithmetic, vs the base's 1.74% math floor. "Functions ARE its knowledge"
+> is now a 2-expert ToMoC loop (fetch + compute), not a slogan.
 > Details + per-pass cost in [runs.md](runs.md) and [wiki/JOURNAL.md](wiki/JOURNAL.md).
 
 ## Why smollm:135m is the pick
@@ -161,9 +164,17 @@ bugs and hotfixes in [wiki/BUGS.md](wiki/BUGS.md).
   8892 entries, exact→prefix→fuzzy→miss) + `eval_resolver.py` end-to-end loop.
   **gsm8k_test: base 1.74% → 97.2% resolved-correct** (call_rate 0.992, well_formed 1.000).
   See [wiki/JOURNAL.md](wiki/JOURNAL.md) + [runs.md](runs.md).
-- [ ] **Phase 5 — second tool (`calculate`/`run_code`)**: use 135m's 100% coding
-  strength for math via sandboxed execution; ToMoC grows to 2 experts.
-  (`run_code` plugs into `tool_resolver.resolve()`'s dispatch seam.)
+- [x] **Phase 5 — second tool (`run_code`) (DONE)**: use 135m's strength for math
+  via sandboxed execution; ToMoC grows to 2 experts. `scripts/sandbox.py` is a
+  restricted Python executor (AST-scan rejects imports/open/defs/dunders; separate
+  subprocess with CPU rlimit + timeout kill). `build_synth_cards.py` adds Type-C
+  (run_code) cards — 150 sovereign synthetic arithmetic, disjoint from lookup.
+  **adapter v4** (977 cards: 527 lookup / 300 answer / 150 run_code) emits
+  `run_code` on **100%** of arithmetic cards (100% well-formed) and the sandbox
+  **computes 94.7% correct** (142/150); the lookup loop is preserved at **98.4%**
+  on gsm8k_test (call_rate 0.995). `eval_toolcall.py` / `eval_resolver.py`
+  extended to score Type-C. `run_code` plugs into `tool_resolver.resolve()`'s
+  dispatch seam.
 - [ ] **Phase 6 — LLM-wiki + tooling framework**: disk-backed wiki as the lookup
   source; orchestration layer (pi/hermes/opencode-shaped) dispatches ToMoC calls.
 - [ ] **Phase 7 — correct-and-update-KB**: feed verified facts; model updates its

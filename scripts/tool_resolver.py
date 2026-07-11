@@ -195,13 +195,32 @@ class KB:
 def resolve(tool: str, query: str, kb: KB = None):
     """Entry point. tool-agnostic: route to the right backend by name.
 
-    Today only `lookup` is wired (KB). UNKNOWN_TOOL returned otherwise.
-    Future: add `run_code` (sandboxed exec), `wiki`, etc. as branches.
+    - `lookup`   -> KB resolver (exact -> prefix -> fuzzy -> miss)
+    - `run_code` -> sandboxed Python exec (math/expression answers)
+    UNKNOWN_TOOL returned otherwise.
+
+    This is the ToMoC dispatch seam: each tool is an external, disk-backed
+    "expert" the 135m routes to. Adding tools = adding branches here.
     """
     if kb is None:
         kb = KB.get()
     if tool == "lookup":
         return kb.resolve(query)
+    if tool == "run_code":
+        try:
+            from sandbox import run as _run
+        except Exception as e:
+            return {"verdict": "error", "answer": None,
+                    "matched": None, "method": "run_code",
+                    "error": f"sandbox unavailable: {e}"}
+        r = _run(query)
+        if r["ok"]:
+            return {"verdict": "hit", "answer": str(r["value"]),
+                    "matched": "run_code", "method": "run_code",
+                    "stdout": r["stdout"]}
+        return {"verdict": "error", "answer": None,
+                "matched": None, "method": "run_code",
+                "error": r["error"]}
     return {"verdict": "unknown_tool", "answer": None,
             "matched": tool, "method": None}
 
@@ -209,6 +228,8 @@ def resolve(tool: str, query: str, kb: KB = None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("query", nargs="?", help="query text to resolve")
+    ap.add_argument("--tool", default="lookup",
+                    help="tool backend to route to (lookup | run_code)")
     ap.add_argument("--miss", dest="force_miss", action="store_true",
                     help="also show a guaranteed-miss example")
     ap.add_argument("--stats", action="store_true",
@@ -227,12 +248,14 @@ def main():
         return
 
     if args.query:
-        r = resolve("lookup", args.query)
-        print(json.dumps({"query": args.query, **r}, ensure_ascii=False))
+        r = resolve(args.tool, args.query)
+        print(json.dumps({"tool": args.tool, "query": args.query, **r},
+                         ensure_ascii=False))
 
     if args.force_miss:
         r = resolve("lookup", "What is the capital of France?")
-        print(json.dumps({"query": "What is the capital of France?", **r},
+        print(json.dumps({"tool": "lookup",
+                          "query": "What is the capital of France?", **r},
                          ensure_ascii=False))
 
 

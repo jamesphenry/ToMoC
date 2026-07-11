@@ -12,15 +12,16 @@ Ollama) — so we teach the habit with a LoRA adapter that emits a mini call
 script: `TOOL lookup query="<question>"`. Thesis: *functions ARE its knowledge*;
 reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 
-## Current state (as of 2026-07-10, commit 3baa7a0)
-- **Best adapter: `adapters/v3/`** — LoRA trained on 827 synthetic cards.
-  - call_rate_when_should **0.970**, well_formed **0.970** (REAL — closes quote),
-    correct_tool 1.000, over_call 0.027. (pass 10)
-  - This is the milestone: a 135m model that calls lookup 97% of the time it
-    should, with the right tool, correctly formatted, barely over-calling.
-- **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it must
-  route around. (pass 5)
-- **Cost tracking live**: total **$0.0161** across 10 passes (README banner).
+## Current state (as of 2026-07-11, after Phase 5)
+- **Best adapter: `adapters/v4/`** — LoRA trained on 977 cards (527 lookup /
+  300 answer / 150 run_code). v4 has TWO tools: `lookup` (fetch) + `run_code` (compute).
+  - toolcall eval (pass 15): lookup call_rate **0.966**, run_code_rate **1.000**
+    (100% well-formed). Both tools learned; lookup habit preserved from v3.
+  - resolver eval (pass 16/17): run_code computes **94.7% correct** (142/150);
+    gsm8k lookup loop **98.4% correct** (1269/1290, call_rate 0.995).
+- **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
+  around via lookup (98.4%) + run_code (94.7%).
+- **Cost tracking live**: total **$0.0274** across 17 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -42,13 +43,13 @@ source .venv/bin/activate
 
 # re-evaluate an adapter (chunked, no OOM):
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-python -u scripts/eval_toolcall.py --model adapters/v3 --data data/raw/flashcards2.jsonl
+python -u scripts/eval_toolcall.py --model adapters/v4 --data data/raw/flashcards2.jsonl
 
 # train a new adapter:
 python -u scripts/train_adapter.py --data data/raw/flashcards2.jsonl \
         --out adapters/vN --epochs 3 --lr 2e-4 --batch 8 --max-len 256
 
-# regenerate the 827-card synthetic training set (caps query to MAX_Q=180):
+# regenerate the synthetic training set (Type A lookup / B answer / C run_code):
 python scripts/build_synth_cards.py
 
 # gsm8k math baseline (batched HF, fast):
@@ -70,30 +71,44 @@ python scripts/eval_gsm8k_hf.py --data ~/llm_eval/datasets/gsm8k_test.jsonl --ba
 - `flashcards2.jsonl` is GENERATED (not hand-authored) — regenerate, don't edit.
 - `adapters/`, `models/`, `logs/`, `benchmarks/*.db` are gitignored (artifacts).
 
-## Open next step (DIRECTION B — DONE, 2026-07-10)
-The lookup now **computes** end-to-end (pass 11). The model emits
-`TOOL lookup query="..."` (v3: 99.2% call, 100% well-formed) and a
-sovereign KB resolver (`scripts/tool_resolver.py`) resolves it against the
-on-disk gsm8k_train+test + mmlu algebra (8892 entries, zero external APIs),
-then `scripts/eval_resolver.py` scores the full loop: **97.2% resolved-correct**
-on gsm8k_test (base alone was 1.74%). Resolution tiers: exact → prefix
-(salves BUG-008 truncated q) → fuzzy (Jaccard≥0.8) → miss.
+## Open next step (PHASE 5 DONE, 2026-07-11)
+The model now has TWO tools. `lookup` (fetch) and `run_code` (compute) both
+resolve end-to-end:
+- `lookup`: emits `TOOL lookup query="..."` → sovereign KB resolver
+  (`scripts/tool_resolver.py`, 8892 entries, zero external APIs) → **98.4%**
+  resolved-correct on gsm8k_test (pass 17, call_rate 0.995).
+- `run_code`: emits `TOOL run_code code="<expr>"` → restricted executor
+  (`scripts/sandbox.py`) computes it → **94.7% correct** (142/150, pass 16).
+  Sandbox is defense-in-depth: AST-scan rejects imports/open/defs/dunders, runs
+  in a separate `-I` subprocess with a CPU rlimit + timeout kill.
 
 Run it:
 ```bash
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-python -u scripts/eval_resolver.py --model adapters/v3 \
+# lookup loop on gsm8k (end-to-end):
+python -u scripts/eval_resolver.py --model adapters/v4 \
         --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
+# run_code end-to-end (Type-C cards scored vs gold):
+python -u scripts/eval_resolver.py --model adapters/v4 \
+        --data data/raw/flashcards2.jsonl --kind flashcard
+# toolcall habit eval (A/B/C scored):
+python -u scripts/eval_toolcall.py --model adapters/v4 --data data/raw/flashcards2.jsonl
 # resolver standalone smoke test (no GPU):
 python scripts/tool_resolver.py --stats
-python scripts/tool_resolver.py "Natalia sold clips ... altogether in April and May?"
+python scripts/tool_resolver.py --tool run_code "51 + 99"
 ```
-- Every eval now writes a FULL per-item JSONL log to `logs/`
+- Every eval writes a FULL per-item JSONL log to `logs/`
   (`eval_resolver_*.jsonl`, `eval_toolcall_*.jsonl`) — inspectable after the fact.
-- **Next real capability step (still open):** `run_code` sandbox (route arithmetic
-  expressions / synthesize-code from word problems to a sandboxed Python exec) and
-  LLM-wiki / SearXNG for factual lookups. See `future.md` (ToMoC). The resolver's
-  `resolve(tool, query)` dispatch seam is where those plug in.
+- **Next real capability step (open):** Phase 6 — LLM-wiki / disk-backed wiki as the
+  lookup source + an orchestration layer (pi/hermes/opencode-shaped) to dispatch
+  ToMoC calls. OR: push run_code coverage higher (the residual 5.3% on 3-arg word
+  problems is the 135m's own operator confusion, not a sandbox bug). See `future.md`.
+
+## Card schema (build_synth_cards.py)
+- Type A (lookup):  `a = TOOL lookup query="<verbatim q>"`
+- Type B (answer):  `a = <answer>` (model answers directly, no tool)
+- Type C (run_code):`a = TOOL run_code code="<expr>"`, carries `answer` + `code`
+  for training/eval scoring. Disjoint from A (no same-question contradiction).
 
 ## Commit / push
 - Branch `main`, remote `origin` (local GitLab 192.168.0.4). Identity

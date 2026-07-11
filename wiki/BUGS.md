@@ -173,7 +173,52 @@
   iterator (or a JSONL reader) so in-string Unicode separators can't shatter
   a record. `textwrap`/`splitlines` family is for display text, not records.
 
+## BUG-010 — resolver missed valid lookups on Unicode punctuation drift (spot-check)
+- **Symptom**: pass-11 spot-check found 27 `resolved_miss` rows that were NOT
+  real KB gaps — re-running the emitted query against the KB often matched a
+  prefix but scored `miss`. Two distinct causes:
+  1. **Curly-quote drift (4/27)**: KB prompts contain typographic `’`/`“`/`”`
+     but the model emits ASCII `'`/`"`. `norm()` lowercased but did NOT fold
+     Unicode punctuation, so `kp.startswith(nq)` failed at that one codepoint.
+  2. **Re-wording drift (~13/27)**: the model re-tells the problem instead of
+     quoting verbatim — "stolen"→"stole", "enormous"→"immense", "brother"→
+     "sister", "none"→"50 birds". The prefix tier can't catch substitution
+     (and shouldn't blindly, or it false-matches near-duplicate gsm8k problems).
+- **Fix**: `norm()` now folds Unicode punctuation to ASCII (curly quotes/dashes,
+  nbsp, U+2028/2029) BEFORE matching, and `FUZZY_THRESH` lowered 0.8 → 0.7.
+  Replaying the real pass-11 log through the updated resolver recovered **14 of
+  27** misses with **0 false positives** against the 1282 established hits →
+  end-to-end 97.2% → **98.3%** (1296/1319). The residual 13 are genuine model
+  verbatim-drift the resolver deliberately does NOT guess at (risky false matches).
+- **Caught**: pass-11 per-item log spot-check (`logs/eval_resolver_*.jsonl`).
+- **Verified**: ad-hoc log-replay (no GPU) — 14 recovered, 0 false positives.
+
+## BUG-011 — gen_arith used `c` before assignment in 3-arg templates
+- **Symptom**: `build_synth_cards.py` (with the new Type-C run_code generator)
+  crashed `UnboundLocalError: cannot access local variable 'c' where it is not
+  associated with a value` when a 3-arg word-problem template was selected
+  before any 2-arg one (the `c = rng.randint(...)` lived only in the else branch).
+- **Root cause**: `c` was assigned inside the 3-arg branch but referenced in the
+  shared `tmpl.format(a=a, b=b, c=c)` call below. If the first template drawn was
+  3-arg, `c` was fine; but the loop hit a 2-arg template first on some seeds and
+  `c` was never bound.
+- **Fix**: always define `c = 0` up front (and only overwrite in the 3-arg
+  branch). Also tightened division templates to keep the divisor small (2-12).
+- **Caught**: running the generator before training (no GPU wasted).
+- **Verified**: regenerated 977 cards; all 150 Type-C `code` strings accepted by
+  the sandbox AND compute to their stored `answer` (0 mismatches).
+
 ---
+
+## Sandbox design notes (scripts/sandbox.py, Phase 5)
+`run_code` executes untrusted model output. Defense-in-depth (not a general REPL):
+- AST pre-scan (`_scan`) rejects imports, defs, `__import__`, `open`, dunder
+  attrs, and `while/with/try/raise/...` BEFORE spawning anything.
+- Execution runs in a SEPARATE `-I` (isolated) subprocess, stripped env, with a
+  `RLIMIT_CPU` cap + Python `timeout` — a `while True` is killed, not hung.
+- Verified adversarial: `import os`, `from os import`, dunder attr, `open()`,
+  function defs, and `open()` inside a comprehension all rejected at the AST scan.
+  Math (incl. big ints) computes correctly. This is the compute half of ToMoC.
 
 ## How to add a bug
 Copy the template, bump the number, fill it in, commit with the others.

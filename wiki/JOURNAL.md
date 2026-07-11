@@ -68,6 +68,12 @@ without scaling params.
 | 9 | TRAIN adapters/v3 (capped-query, MAX_Q=180) | smollm:135m | 0.149 | 889.5s | 1112MB | — | — | — |
 | 10 | eval adapters/v3 (capped data) | adapters/v3 | — | 356.3s | — | **0.970** | 0.027 | **0.970** |
 | 11 | **END-TO-END resolver eval** (v3 → KB lookup → score) | adapters/v3 | — | 939.3s | 573MB | call=0.992 WF=1.000 **resolved-correct=0.972** | — | — |
+| 12 | gsm8k baseline (HF, batched) | smollm-135m-instruct | — | — | 359MB | gsm8k_acc=0.017 | — | — |
+| 13 | gsm8k HF re-run (cost-log fix check) | smollm-135m-instruct | — | — | — | gsm8k_acc=0.017 | — | — |
+| 14 | TRAIN adapters/v4 (977 cards A/B/C) | smollm:135m | 0.176 | 510.3s | 1111MB | — | — | — |
+| 15 | eval adapter v4 habit (A/B/C) | adapters/v4 | — | 395.4s | — | lookup_call=0.966 run_code=1.000 (WF 1.000) over_call=0.047 | — | — |
+| 16 | resolver eval v4 (flashcard, run_code end-to-end) | adapters/v4 | — | 391.4s | — | call=0.689 WF=1.000 **run_code correct=0.947 (142/150)** | — | — |
+| 17 | resolver eval v4 (gsm8k lookup loop) | adapters/v4 | — | 932.9s | — | call=0.995 WF=0.999 **resolved-correct=0.984 (1269/1290)** | — | — |
 
 ⚠️ pass 7's `well_formed=0.488` was a MEASUREMENT BUG (BUG-008), not a model flaw:
 the model emits the correct `TOOL lookup query="..."` but `max_new_tokens=64`
@@ -168,6 +174,52 @@ have aborted the math KB. See wiki/BUGS.md.
 **Going-forward change (user ask):** every eval now writes a FULL per-item JSONL
 log to `logs/` (eval_resolver_*.jsonl and eval_toolcall_*.jsonl) so each run is
 inspectable after the fact — not just the summary line.
+
+## PHASE 5 — second tool: `run_code` (compute) (DONE, pass 14-17)
+
+Phase 4 proved `lookup` works end-to-end. Phase 5 adds a SECOND expert so the
+model can *compute*, not just fetch — the ToMoC router now picks between
+fetch (lookup) and compute (run_code). This is the "functions ARE its knowledge"
+endgame: the tiny model routes arithmetic to a sandboxed executor.
+
+**The sandbox (`scripts/sandbox.py`) — defense-in-depth, sovereign:**
+- AST pre-scan rejects imports, defs, `__import__`, `open`, dunder attrs, and
+  `while/with/try/raise` BEFORE anything executes. Cheap, no side effects.
+- Execution runs in a SEPARATE `-I` (isolated) subprocess with a stripped env,
+  a `RLIMIT_CPU` cap, and a Python `timeout` — a `while True` is killed, not hung.
+- Returns the last expression's value (REPL-style) + captured stdout.
+- Verified adversarial: `import os`, `open('/etc/passwd')`, dunder attr, defs,
+  and `open` inside a comprehension all blocked; infinite loop killed.
+
+**Training data (`build_synth_cards.py`):** added **Type C (run_code)** cards —
+150 sovereign synthetic arithmetic word problems (templates + random ints), each
+carrying a `code` expr + gold `answer`. Sourced DISJOINT from Type A (lookup) so
+the same question never has two targets (which would contradict and break both
+habits). The priming cue in `train_adapter.py`/`eval_toolcall.py` was left
+**byte-identical** — v4 learns `run_code` purely from the data, preserving v3's
+lookup habit. Dataset: 977 cards (527 lookup / 300 answer / 150 run_code).
+
+**Results (passes 14-17, $0.0274 total across 17 passes):**
+- v4 emits `run_code` on **100%** of arithmetic cards (100% well-formed) — the
+  new tool habit installed cleanly (pass 15).
+- `run_code` end-to-end (pass 16): the model emits the code, the sandbox computes
+  it, **142/150 = 94.7% correct** vs the gold. Base math floor was 1.74%.
+- `lookup` loop preserved (pass 17): gsm8k_test **98.4% correct** (1269/1290,
+  call_rate 0.995, well_formed 0.999). Slightly above v3's resolver coverage.
+- `over_call_rate` crept 0.027 → 0.047 (more tool use overall) but still low.
+
+**Residual error analysis (the honest 5.3%):** all 150 run_code rows were routed
+to the sandbox; the 8 misses are genuine **model arithmetic errors**, not sandbox
+bugs. The 135m emits e.g. `20 * 41` (computed correctly =820) when the word
+problem needed `20 - 41` (=-21) — operator confusion on 3-arg word problems
+(`X and Y, then Z...`). The sandbox computes exactly what's asked (0 errors
+across the whole eval). So the ceiling here is the 135m's own reasoning, not the
+executor — pushing past 94.7% means either more Type-C training variety or a
+bigger base (360m), not sandbox changes.
+
+**Dispatch seam:** `tool_resolver.resolve(tool, query)` now branches `lookup`
+→ KB and `run_code` → sandbox. Adding Phase 6 tools (wiki, etc.) = adding a
+branch here. `eval_toolcall.py` / `eval_resolver.py` extended to score Type-C.
 
 ## What's next (open)
 
