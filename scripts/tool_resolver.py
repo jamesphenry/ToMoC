@@ -50,16 +50,40 @@ KB_FILES = [
     os.path.join(DATASETS, "mmlu_abstract_algebra_test.jsonl"),
 ]
 
-FUZZY_THRESH = 0.8  # token-set Jaccard above this counts as a hit
+FUZZY_THRESH = 0.7  # token-set Jaccard above this counts as a hit
+                     # (0.7 recovers light re-wording; verified 0 false-pos vs hits)
 
 # ---- text normalization (deterministic, no deps) -------------------------
 _WS = re.compile(r"\s+")
 _PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
 
+# Unicode punctuation the model often emits differently from the KB
+# (curly quotes/dashes). Fold to ASCII so verbatim-ish queries align.
+_CURLY = {
+    "’": "'", "‘": "'",
+    "“": '"', "”": '"',
+    "–": "-", "—": "-",
+    "…": "...",
+    "\u00a0": " ",   # nbsp
+    "\u2028": " ", "\u2029": " ",  # line/para separators
+}
+
+
+def _fold_unicode(t: str) -> str:
+    for k, v in _CURLY.items():
+        t = t.replace(k, v)
+    return t
+
 
 def norm(t: str) -> str:
-    """Collapse whitespace + lowercase. Fast equality/prefix key."""
-    return _WS.sub(" ", t.strip()).lower()
+    """Collapse whitespace + lowercase. Fast equality/prefix key.
+
+    Folds Unicode punctuation (curly quotes, dashes, nbsp, U+2028/2029)
+    to ASCII first so a query emitted with ' matches a KB prompt with ’.
+    """
+    if not t:
+        return ""
+    return _WS.sub(" ", _fold_unicode(t).strip()).lower()
 
 
 def toks(t: str) -> set:
