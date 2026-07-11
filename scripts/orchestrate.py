@@ -136,6 +136,27 @@ def run_question(engine, kb, q, gold, verbose=False):
     return rec
 
 
+def chat_display(rec):
+    """Clean, conversational render of one ToMoC turn for the playground.
+
+    Surfaces the model's *reasoning* (its tool-call choice) and the tool's
+    result as a thinking step, then the final answer as a reply. Only echoes
+    data the model/tool actually produced — no fabricated prose.
+    """
+    print("  reasoning:")
+    if rec["called"]:
+        print(f"    • model called: {rec['turn1']}")
+        res = rec.get("resolved")
+        if res:
+            if res.get("verdict") == "hit":
+                print(f"    • tool returned: {res.get('answer')}")
+            else:
+                print("    • tool returned: (no answer found in the knowledge base)")
+    else:
+        print("    • model answered directly (no tool call)")
+    print(f"\n  answer: {rec['final_answer']}\n")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=DEFAULT_MODEL)
@@ -219,8 +240,8 @@ def main():
                 else:
                     print("  usage: /mark <n> <seen|fixed>")
                 continue
-            rec = run_question(engine, kb, q, None, verbose=True)
-            print(f"answer> {rec['final_answer']}\n")
+            rec = run_question(engine, kb, q, None, verbose=False)
+            chat_display(rec)
             transcript.append({
                 "q": q,
                 "call": rec["turn1"],

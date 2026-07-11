@@ -22,24 +22,30 @@ python -u scripts/orchestrate.py --chat
 
 ## What you see
 
-For each question the loop prints:
+For each question the playground shows the model's *reasoning* (its tool-call
+choice) and the tool's result as a thinking step, then the final answer as a
+clean reply:
 
 ```
 you> A baker made 3 trays of 12 cookies each. How many cookies?
-Q: A baker made 3 trays of 12 cookies each. How many cookies?
-  turn1: TOOL run_code code="3 * 12"
-  tool=run_code query='3 * 12' verdict=hit
-  result fed back: 36
-  turn2 final: 36
-  gold=None  final_correct=None  canonical_correct=None
-answer> 36
+  reasoning:
+    • model called: TOOL run_code code="3 * 12"
+    • tool returned: 36
+
+  answer: 36
 ```
 
-- `turn1` — the raw call the model emitted (`TOOL lookup query="..."` or
-  `TOOL run_code code="..."`).
-- `verdict` — `hit` (resolver found an answer / ran the code) or a miss.
-- `result fed back` — what was injected before turn 2.
-- `answer>` — the model's final answer (echoes the tool result when it's right).
+- **reasoning** — the model's actual thinking. It decided to call `run_code`
+  and wrote the exact expression (`3 * 12`). For a lookup question this shows
+  `TOOL lookup query="..."`; if the model answers directly it says so.
+- **tool returned** — what the resolver/sandbox produced (`hit` → the value;
+  otherwise `(no answer found in the knowledge base)`).
+- **answer** — the model's final reply, echoing the tool result when it's right.
+
+> Note: this is a *surface* of the reasoning the model already does. The 360m
+> adapter was trained to emit the tool call + echo the result; it does not
+> narrate a natural-language chain-of-thought. (Training real CoT is a separate,
+> later step — see the share-and-review loop / future phases.)
 
 ## Commands (inside the chat)
 
