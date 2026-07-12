@@ -33,9 +33,14 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
     numbers on a lookup miss). loss 0.1223.
   - `adapters/v10/` — 360m + Type-E + **Type-F** (show-your-work: emit reasoning
     then `run_code`). 1833-card set (527A/300B/300C/300D/300E/106F). Router quality
-    **97.2% precision / 96.8% recall** (gold-labeled flashcard eval); run_code
-    executes correctly when routed; Type-E honesty holds (no guessed numbers).
-    The show-work *prefix* didn't transfer strongly, but routing-to-run_code did.
+    **97.2% precision / 96.8% recall** (gold-labeled FLASHcard eval); run_code
+    executes correctly when routed; Type-E honesty holds (no guessed numbers);
+    show-work *prefix* transfers strongly (484/490 run_code outputs reason first).
+    **BUT measured gsm8k end-to-end (pass 40) = 0.597 correct_vs_gold** — a
+    REGRESSION vs v8's 0.958. Root cause: Type-F tipped routing — v10 over-emits
+    `run_code` on look-up-able gsm8k (490 run_code, only 8/490 correct because 429
+    SHOULD have been lookups). When it DOES route to lookup it's 640/640 = 100%.
+    v11 rebalances the mix (more Type-A/D) to restore routing.
   - Dataset: 1833 cards (527 lookup / 300 answer / 300 run_code / 300 two-turn-D /
     300 KB-miss-E / 106 show-work-F).
 - **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
@@ -43,7 +48,7 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.1278** across 39 passes (README banner).
+- **Cost tracking live**: total **$0.1333** across 40 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;

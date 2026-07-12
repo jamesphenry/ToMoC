@@ -437,11 +437,12 @@ cards = 527A/300B/300C/300D/300E/106F, loss **0.2351**, 2642.7s, 1660MB, pass 38
 
 **Honest result (pass 39, flashcard router-metrics):** router_precision
 **0.972** / recall **0.968**, call_rate 0.996, well_formed 0.996, over_call 0,
-false_tool 14, missed_tool 2. Type-E honesty held (no guessed numbers). BUT the
-show-work *prefix did not transfer* — v10 emits the clean `TOOL run_code
-code="…"` without the verbose reasoning; a few word-problems still misroute to
-`lookup` (the format habit won, the prefix didn't). The router-metrics eval is
-the authoritative signal (flashcard `resolved_hit 0.721` is a known join
+false_tool 14, missed_tool 2. Type-E honesty held (no guessed numbers). Show-work
+*prefix transferred strongly* — later measured on the flashcard set: **484/490**
+run_code outputs open with a `This is addition because…` reasoning span (the
+format habit AND the prefix both stuck). A few word-problems still misroute to
+`lookup` (the format habit won, the prefix didn't *on those*). The router-metrics
+eval is the authoritative signal (flashcard `resolved_hit 0.721` is a known join
 artifact — gold=None for many C rows; gsm8k stays the trustworthy end-to-end
 number). Also fixed a **run_code empty-code crash** in `tool_resolver.resolve()`
 (BUG-008-adjacent): malformed/truncated `run_code` calls with `None` code now
@@ -461,8 +462,38 @@ sync.
 
 **Where this leaves the thesis:** ToMoC is demonstrably *working* — a 360m
 sovereign model routes to external experts (KB lookup ~99% + run_code ~97%) and
-faithfully reports the answer, with honest "I don't know" on KB-miss. Residual
-~4% gsm8k is KB re-wording + rare arithmetic slips, not the loop.
+faithfully reports the answer, with honest "I don't know" on KB-miss. The loop
+mechanics are sound; the open question is *routing balance* under a richer card
+mix (see pass 40 below).
+
+### PASS 40 — v10 gsm8k end-to-end (the number we'd been missing)
+We never actually eval'd v10 on gsm8k end-to-end — the "~95.7% like v8" I'd been
+quoting was **borrowed from v8 and never measured**. Pass 40 ran it for real and
+it's a **REGRESSION**:
+
+- correct_vs_gold = **648/1086 = 0.597** (v8 was 0.958). call_rate 0.862,
+  router_precision 0.464 / recall 0.400, false_tool 610.
+- **Root cause (isolated, not guessed):** when v10 routes to `lookup` it's
+  **640/640 = 100% correct** (better than v8's 98.5%). When it routes to
+  `run_code` it's **8/490 = 1.6%** — because **429 of those 490 gsm8k questions
+  SHOULD have been lookups** (the KB has the exact answer). Type-F's "reason then
+  `run_code`" format *tipped the routing default*: v10 now over-emits run_code on
+  look-up-able gsm8k. The free resolver lever can't fix this — the model isn't
+  *calling* lookup.
+- **Silver lining (this was the user's #2 ask):** the show-work reasoning trail
+  transferred *strongly* — **484/490** run_code outputs open with a `This is
+  addition because…` span. So the reasoning trail is real; the cost was routing.
+
+**Lesson re-learned:** always measure the metric you're claiming before you quote
+it. The flashcard router-metrics (97.2%/96.8%) looked great and masked a gsm8k
+routing collapse — the two sets measure different things and only gsm8k is the
+trustworthy end-to-end signal.
+
+**Fix planned (v11):** rebalance the training mix to re-anchor lookup — bump
+`--gsm` 500→1800 (more Type-A from the 7473-row gsm8k_train) + `--d` 300→400
+(more lookup two-turn), KEEP Type-F at 106 so the playground keeps the reasoning
+trail. One retrain (~45 min) + gsm8k re-eval (~26 min). If routing still off,
+next lever is cutting F or adding format-neutral lookup-with-reasoning cards.
 
 ## What's next (directions — open, not yet chosen)
 
