@@ -50,7 +50,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 from eval_toolcall import Engine, format_prompt, parse_call
-from tool_resolver import resolve, KB
+from tool_resolver import resolve, KB, WikiKB
 
 DEFAULT_MODEL = os.path.join(ROOT, "adapters", "v8")
 MAX_NEW = 160         # turn-1 / turn-2 continuation budget; 160 (was 64) so a
@@ -200,8 +200,10 @@ def main():
         print("type a question, 'quit'/'exit' to leave. The model will call a "
               "tool, get the result, then answer.")
         print("  /export [path]  save this conversation as markdown")
-        print("  /mark <n> <seen|fixed>  mark a turn's review status\n")
+        print("  /mark <n> <seen|fixed>  mark a turn's review status")
+        print("  /approve  commit the last proposed wiki write (sovereign gate)\n")
         transcript = []  # each: dict(q, call, verdict, result, final)
+        last_proposal = [None]  # holds the most recent proposed_write entry (for /approve)
 
         def render_md(path, turns, model):
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -258,8 +260,41 @@ def main():
                 else:
                     print("  usage: /mark <n> <seen|fixed>")
                 continue
+            if q.startswith("/approve"):
+                # Phase 7 #1: commit the last proposed wiki write (gated).
+                prop = last_proposal[0]
+                if not prop:
+                    print("  nothing pending to approve")
+                else:
+                    action, e = WikiKB.get().commit_write(
+                        prop["entry"], source="model-approved")
+                    print(f"  APPROVED -> {action}: {e.get('key')!r} = "
+                          f"{e.get('body')!r}")
+                    last_proposal[0] = None
+                continue
             rec = run_question(engine, kb, q, None, verbose=False)
             chat_display(rec)
+            # Phase 7 #1: if the model PROPOSED a wiki write, remember it and
+            # offer the human the approve gate right here (no silent commit).
+            if rec.get("resolved") and \
+                    rec["resolved"].get("verdict") == "proposed_write":
+                last_proposal[0] = rec["resolved"]
+                print("\n  ⚠ model proposes a wiki write (NOT committed).")
+                print('  approve? type "/approve" (or just "y"), or anything'
+                      " else to decline.")
+                try:
+                    ans = input("  approve> ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    ans = ""
+                if ans in ("y", "yes", "/approve"):
+                    action, e = WikiKB.get().commit_write(
+                        rec["resolved"]["entry"], source="model-approved")
+                    print(f"  APPROVED -> {action}: {e.get('key')!r} = "
+                          f"{e.get('body')!r}")
+                    last_proposal[0] = None
+                else:
+                    print("  declined — write stays a proposal (use /approve "
+                          "later, or ignore).")
             transcript.append({
                 "q": q,
                 "call": rec["turn1"],
