@@ -80,7 +80,8 @@ def load_from_eval():
 
     a, b = [], []
     for it in c.execute(
-        "SELECT task_id, question, correct FROM runitems WHERE run_id=?", (rid,)
+        "SELECT task_id, question, expected, response, correct "
+        "FROM runitems WHERE run_id=?", (rid,)
     ):
         q = (it["question"] or "").strip()
         if not q:
@@ -92,8 +93,14 @@ def load_from_eval():
             "knowledge_qa", "reasoning_logic",
             "dataset_mmlu_abstract_algebra_test",
         ):
+            # BUG-010 fix: use the real gold answer (expected), NOT the
+            # literal "<answer>" placeholder. The placeholder taught the model
+            # to emit the string "<answer>" verbatim on out-of-knowledge Qs.
+            gold = (it["expected"] or "").strip() or (it["response"] or "").strip()
+            if not gold:
+                continue
             b.append({"type": "B", "src": f"eval.{it['task_id']}",
-                      "q": q, "a": "<answer>"})
+                      "q": q, "a": gold})
     c.close()
     return a, b
 
