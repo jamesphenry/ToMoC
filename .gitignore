@@ -25,6 +25,10 @@ benchmarks/*.csv
 benchmarks/*.db
 .ipynb_checkpoints/
 
+# --- Podcast audio (local-only: 133MB of .m4a, don't bloat git/mirrors) ---
+# player.html + pod/README.md ARE committed; the audio is referenced by path.
+pod/*.m4a
+
 # --- OS / editor ---
 .DS_Store
 *.swp

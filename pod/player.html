@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>smol-lab · podcasts</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #0d1117; color: #e6edf3; margin: 0; padding: 2rem 1rem;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  .sub { color: #8b949e; margin: 0 0 1.5rem; font-size: .9rem; }
+  .ep {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 1rem 1.1rem; margin: 1rem 0;
+  }
+  .ep h2 { font-size: 1.05rem; margin: 0 0 .35rem; }
+  .ep p { color: #8b949e; font-size: .85rem; margin: 0 0 .75rem; }
+  audio { width: 100%; }
+  a { color: #58a6ff; }
+  footer { color: #6e7681; font-size: .8rem; margin-top: 2rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ smol-lab podcasts</h1>
+  <p class="sub">NotebookLM audio overviews generated about this project.
+     Audio files live locally in <code>pod/</code> (gitignored — not pushed to the
+     mirrors). Open this file in a browser to listen.</p>
+
+  <div class="ep">
+    <h2>1 · Critique: Twelve-Cent Tool Routing with Tiny Models</h2>
+    <p>A NotebookLM critique of the ToMoC thesis — tiny models routing to tools
+       instead of memorizing.</p>
+    <audio controls preload="none" src="Critique_Twelve_Cent_Tool_Routing_with_Tiny_Models.m4a"></audio>
+  </div>
+
+  <div class="ep">
+    <h2>2 · Deep Dive: Twelve-Cent AI Passes Math Without Memorizing</h2>
+    <p>Walkthrough of how a 360m model hits ~99% math via lookup + run_code,
+       at ~$0.13 total compute.</p>
+    <audio controls preload="none" src="Deep_Dirve_Twelve_cent_AI_passes_math_without_memorizing.m4a"></audio>
+  </div>
+
+  <div class="ep">
+    <h2>3 · Debate: 99% Math Accuracy for Twelve Cents</h2>
+    <p>A NotebookLM debate on whether sovereign tiny-model tool-routing is a real
+       result or a parlor trick.</p>
+    <audio controls preload="none" src="Debate_99_Percent_Math_Accuracy_For_Twelve_Cents.m4a"></audio>
+  </div>
+
+  <footer>
+    Generated artifacts for the smol-lab repo ·
+    <a href="https://github.com/jamesphenry/ToMoC">GitHub mirror</a>
+  </footer>
+</div>
+</body>
+</html>
