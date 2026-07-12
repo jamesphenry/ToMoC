@@ -526,6 +526,56 @@ def load_wiki_cards(n_single, n_twoturn, seed=0):
     return cards
 
 
+def load_write_cards(n, seed=0):
+    """Phase 7 #1 (FLAG-TO-DATASET): teach the model to EMIT `TOOL wiki_write`
+    when it has a verified fact to save.
+
+    Single-turn cards only: the target is the write call itself (the human
+    approval gate lives in tool_resolver.resolve, not in training). For each
+    wiki entry we build a 'save this fact' instruction -> the write call.
+    Returns up to `n` Type-H cards.
+    """
+    if not os.path.exists(WIKI_PATH) or n <= 0:
+        return []
+    entries = []
+    with open(WIKI_PATH, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                continue
+    if not entries:
+        return []
+    rng = random.Random(seed)
+    rng.shuffle(entries)
+
+    templates = [
+        'Save this fact: {key} is {body}',
+        'Remember that {key} is {body}.',
+        'Store the following: {key} — {body}',
+        'Add to your knowledge base: {key} = {body}',
+    ]
+    cards = []
+    for e in entries:
+        if len(cards) >= n:
+            break
+        key = e["key"].strip()
+        body = e["body"].strip()
+        if not key or not body:
+            continue
+        q = rng.choice(templates).format(key=key, body=body)
+        # truncate to keep within MAX_Q so the model learns to close quotes
+        if len(q) > MAX_Q:
+            q = q[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
+        call = f'TOOL wiki_write key="{key}" body="{body}"'
+        cards.append({"type": "H", "src": "wiki.write",
+                      "q": q, "a": call, "answer": body})
+    return cards
+
+
 # -------------------------------------------------------------------------
 # assemble
 # -------------------------------------------------------------------------
@@ -568,6 +618,11 @@ def main():
                          "(rest: single-turn routing)")
     ap.add_argument("--g-seed", type=int, default=0,
                     help="deterministic seed for shuffling the wiki store")
+    ap.add_argument("--h", type=int, default=0,
+                    help="how many Type-H (wiki WRITE) cards to draw from "
+                         "data/wiki/wiki.jsonl [Phase 7 #1: emit TOOL wiki_write]")
+    ap.add_argument("--h-seed", type=int, default=0,
+                    help="deterministic seed for the Type-H write cards")
     args = ap.parse_args()
 
     a_gsm = load_gsm(args.gsm)
@@ -581,6 +636,7 @@ def main():
     g_cards = (load_wiki_cards(max(0, args.g - args.g_twoturn),
                                args.g_twoturn, seed=args.g_seed)
                if args.g else [])
+    h_cards = load_write_cards(args.h, seed=args.h_seed) if args.h else []
 
     A = a_gsm + a_eval
     B = b_eval[:args.b_cap]
@@ -589,8 +645,9 @@ def main():
     E = e_cards
     F = f_cards
     G = g_cards
+    H = h_cards
 
-    cards = A + B + C + D + E + F + G
+    cards = A + B + C + D + E + F + G + H
     with open(args.out, "w") as f:
         for c in cards:
             f.write(json.dumps(c) + "\n")
@@ -613,6 +670,7 @@ def main():
           f"{sum(1 for x in G if 'route' in x.get('src',''))} "
           f"echo={sum(1 for x in G if 'echo' in x.get('src',''))} "
           f"seed={args.g_seed}]")
+    print(f"  Type H (wiki WRITE): {len(H)}  [seed={args.h_seed}]")
     print("  A:B:C ratio =",
           round(len(A) / max(1, len(B)), 2), ":",
           round(len(B) / max(1, len(B)), 2), ":",

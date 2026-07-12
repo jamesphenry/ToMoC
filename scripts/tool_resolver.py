@@ -278,6 +278,34 @@ class WikiKB:
         self._save()
         return "created", e
 
+    def propose_write(self, key: str, body: str, source: str = "model"):
+        """Phase 7 #1: build a proposed write WITHOUT mutating the store.
+
+        Returns a dict with verdict='proposed_write' and the would-be entry.
+        The caller must gate this through a human (commit_write) before it
+        lands in data/wiki/wiki.jsonl. Sovereign by design: the model can
+        *propose*, never *poison*.
+        """
+        nk = norm(key)
+        now = __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        exists = nk in self._idx
+        action = "updated" if exists else "created"
+        entry = {"key": key, "body": body, "source": source,
+                 "created": now, "updated": now}
+        return {"verdict": "proposed_write", "answer": body,
+                "matched": key, "method": "wiki_write",
+                "action": action, "exists": exists,
+                "entry": entry, "needs_approval": True}
+
+    def commit_write(self, entry: dict, source: str = "model-approved"):
+        """GATED write: only call this after explicit human approval.
+
+        Appends/updates the entry in the store. Returns ('created'|'updated', e).
+        """
+        return self.write(entry.get("key", ""), entry.get("body", ""),
+                          source=source)
+
     def _save(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         tmp = self.path + ".tmp"
@@ -313,6 +341,23 @@ def resolve(tool: str, query: str, kb: KB = None):
         return lookup(query, kb=kb)          # Phase 7: KB -> wiki fallthrough
     if tool == "wiki":
         return WikiKB.get().resolve(query)
+    if tool == "wiki_write":
+        # Phase 7 #1 (FLAG-TO-DATASET): the model proposes a wiki edit. This is
+        # GATED — resolve() NEVER mutates the store. It returns a proposed write
+        # (verdict="proposed_write") that a human must approve via
+        # WikiKB.commit_write() (CLI --wiki-write --approve). Sovereign: no
+        # silent self-poisoning of the knowledge store.
+        if query is None or "\u0001" not in query:
+            return {"verdict": "malformed_write", "answer": None,
+                    "matched": None, "method": "wiki_write",
+                    "error": "wiki_write needs key + body"}
+        key, body = query.split("\u0001", 1)
+        key, body = key.strip(), body.strip()
+        if not key or not body:
+            return {"verdict": "malformed_write", "answer": None,
+                    "matched": None, "method": "wiki_write",
+                    "error": "empty key or body"}
+        return WikiKB.get().propose_write(key, body)
     if tool == "run_code":
         # Guard: a run_code call with empty/None/non-string code must not reach
         # ast.parse (compile(None) crashes). Model sometimes emits
@@ -355,12 +400,33 @@ def main():
                     help="alias for --wiki-add (explicit upsert)")
     ap.add_argument("--wiki-stats", action="store_true",
                     help="print wiki entry count and exit")
+    # Phase 7 #1: model-proposed write, gated behind --approve (no silent poison)
+    ap.add_argument("--wiki-write", nargs=2, metavar=("KEY", "BODY"),
+                    help="PROPOSE a wiki write (key + body); requires --approve "
+                         "to actually commit to data/wiki/wiki.jsonl")
+    ap.add_argument("--approve", dest="approve", action="store_true",
+                    help="commit a --wiki-write proposal to the store")
     args = ap.parse_args()
 
     if args.wiki_add or args.wiki_set:
         key, body = (args.wiki_add or args.wiki_set)
         action, e = WikiKB.get().write(key, body, source="human")
         print(json.dumps({"action": action, **e}, ensure_ascii=False))
+        return
+
+    if args.wiki_write:
+        key, body = args.wiki_write
+        prop = WikiKB.get().propose_write(key, body, source="model")
+        if not args.approve:
+            # gate: show the proposal, do NOT mutate
+            print(json.dumps({**prop,
+                              "committed": False,
+                              "note": "add --approve to commit this write"},
+                             ensure_ascii=False))
+            return
+        action, e = WikiKB.get().commit_write(prop["entry"], source="model-approved")
+        print(json.dumps({"action": action, "committed": True, **e},
+                         ensure_ascii=False))
         return
 
     if args.wiki_stats:

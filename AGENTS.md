@@ -55,13 +55,16 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
     trail preserved: "Compute this: 48 - 5 + 20" → "This is subtraction: 48 - 5
     + 20. TOOL run_code code=\"48 - 5 + 20\"" → 63. **This is the new default
     best (360m).** Proof logs: probe_logs/probe_*_v12.md (8/8 audit pass).
-  - `adapters/v15/` — 360m, **BUG-010 fix**: Type-B cards now carry real
-    gold answers (from eval DB `expected`) instead of the `<answer>`
-    placeholder, so the model emits a real word on out-of-knowledge direct
-    Qs instead of the literal token. Same stack as v14 (360m, 3489 cards,
-    256 G). Pass 48. Wiki routing + echo + lookup + run_code all verified
-    intact; unknown Q ("unladen swallow") now emits "aerodynamics" (real
-    word, not `<answer>`). **Current best 360m adapter.**
+  - `adapters/v16/` — 360m, **+ Type-H (wiki WRITE, gated)**: model can
+    EMIT `TOOL wiki_write key="..." body="..."` but the resolver only
+    returns a *proposed* write (verdict `proposed_write`) — it NEVER mutates
+    the store. A human must approve via `tool_resolver.py --wiki-write KEY
+    BODY --approve` to commit. Sovereign: no silent self-poisoning. 128
+    Type-H cards (from the wiki store). 3617-card set, loss 0.135, pass 49.
+    Verified: emits the call on save-instructions; gate blocks all
+    auto-mutation (malformed/truncated → `malformed_write`). **Current best
+    360m adapter.**
+  - `adapters/v15/` — 360m, BUG-010 fix (real gold answers in Type-B).
   - `adapters/v14/` — 360m, v13 bug-fix (echo + wiki diversity). Superseded by
     v15 (which also fixes BUG-010). Keep for lineage.
   - `adapters/v13/` — 360m, **+ Type-G (wiki routing)** [BUGGY — see v14].
@@ -72,7 +75,7 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.2217** across 48 passes (README banner).
+- **Cost tracking live**: total **$0.2358** across 49 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -132,19 +135,23 @@ python scripts/eval_gsm8k_hf.py --data ~/llm_eval/datasets/gsm8k_test.jsonl --ba
   echo cards trained as single-turn → model echoed the wiki body as a *direct
   answer* and a routed wiki call's turn-2 came back as `"TOOL."`. Fix in v14:
   include `wiki.echo` src. Any new two-turn card flavor MUST be added to that tuple.
+- **BUG-011 (found + fixed in v16)**: the model's `wiki_write` call drifts to
+  `body text="..."` (extra word) on novel facts, which the strict regex
+  `WIKIWRITE_RE` rejected → `malformed_write` (safe but loses a real write).
+  Fix: regex now accepts `body(?:\s+text)?=` (tolerant). Malformed/truncated
+  calls (no closing quote) still correctly reject as `malformed_write` — the
+  sovereign gate never auto-mutates.
 - The priming cue string in `train_adapter.py` and `eval_toolcall.py` MUST stay
   byte-identical or the call habit won't transfer.
 - `flashcards2.jsonl` is GENERATED (not hand-authored) — regenerate, don't edit.
 - `adapters/`, `models/`, `logs/`, `benchmarks/*.db` are gitignored (artifacts).
 
-## Open next step (PHASE 7 IN PROGRESS — 2026-07-12; v12 default best)
+## Open next step (POST-Phase-7 — 2026-07-12; v16 default best)
 Phase 6b closed the ToMoC loop (v8). v12 (360m + Type-E + Type-F-as-compute)
-is the new default best on gsm8k (0.998, pass 44). Now building **Phase 7: a
-disk-backed, read/write LLM-wiki** as a third knowledge source. The
-READ path is live (`lookup` falls through to the wiki after the frozen KB
-misses); the WRITE path is human-in-the-loop for now (no model autonomy yet —
-sovereign, no poison risk). The model does NOT yet emit `TOOL wiki` — that
-needs a `wiki_write`/`wiki` LoRA capability + retrain (separate fork, TBD).
+is the new default best on gsm8k (0.998, pass 44). **Phase 7 is DONE**
+(fork #2 = READ routing `TOOL wiki`, v14/v15; fork #1 = WRITE `TOOL wiki_write`,
+v16 — both verified, sovereign-gated). The model now emits `TOOL wiki` to
+READ and `TOOL wiki_write` to PROPOSE writes (gated, never auto-mutates).
 
 - `run_code`: emits `TOOL run_code code="<expr>"` → restricted executor
   (`scripts/sandbox.py`) computes it. Coverage scales with base size:
@@ -246,11 +253,14 @@ python -u scripts/orchestrate.py --model adapters/v8 \
 - READ path (live, no retrain): `tool_resolver.lookup()` checks the static
   gsm8k/mmlu KB first, then falls through to the wiki. So the existing
   `TOOL lookup` habit immediately benefits from wiki knowledge. Dedicated
-  `TOOL wiki` resolves the wiki directly (same resolver API).
-- WRITE path (human-in-the-loop, sovereign): `tool_resolver.py --wiki-add KEY
-  BODY` (alias `--wiki-set`) upserts an entry atomically. The model does NOT
-  autonomously write yet — that needs a `wiki_write` tool + LoRA retrain
-  (flag-to-dataset style; see future.md). No poison risk: every write is human.
+  `TOOL wiki` (Type-G cards, v14) resolves the wiki directly and the model
+  ECHOES the body as its final answer.
+- WRITE path (autonomous PROPOSE + human-APPROVE gate, sovereign): the model
+  emits `TOOL wiki_write key="..." body="..."` (Type-H cards, v16). The
+  resolver returns a *proposed* write (`verdict=proposed_write`) and NEVER
+  mutates the store. A human commits via `tool_resolver.py --wiki-write KEY
+  BODY --approve`. No poison risk: the model can propose, never poison.
+  (Legacy human-only writes still work: `--wiki-add`/`--wiki-set`.)
 - Fuzzy match: token-set Jaccard over keys+bodies, `WIKI_FUZZY_THRESH=0.5`
   (looser than the KB's 0.7 because the wiki is few + curated).
 

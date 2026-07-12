@@ -101,18 +101,33 @@ def run_question(engine, kb, q, gold, verbose=False):
     else:
         res = resolve(tool, query, kb)
         rec["resolved"] = res
-        if res.get("verdict") == "hit":
+        if res.get("verdict") == "proposed_write":
+            # Phase 7 #1: the model PROPOSED a wiki edit. Sovereign gate — we
+            # never auto-commit. In interactive mode the user approves; in batch
+            # mode we just record the proposal (no store mutation). The loop ends
+            # here (no turn-2 generation needed for a write proposal).
+            rec["final_answer"] = (f"[PROPOSED wiki write] key={res.get('matched')!r} "
+                                   f"body={res.get('answer')!r} "
+                                   f"(needs human approval)")
+            rec["canonical_answer"] = rec["final_answer"]
+            rec["from_tool"] = True
+        elif res.get("verdict") == "hit":
             result_str = res.get("answer")
+            # turn 2: feed the result back
+            t2 = build_turn2_prompt(t1, out1, result_str)
+            (out2,) = engine.generate_all([t2], chunk=1)
+            rec["final_answer"] = out2.strip()
+            rec["canonical_answer"] = result_str   # resolver's own answer
         else:
             # Honest miss: don't feed the model the literal word "miss" (it will
             # guess). A real orchestrator would surface "no answer found" and let
             # the model either give up or reason from its own weights.
             result_str = "No answer found in the knowledge base."
-        # turn 2: feed the result back
-        t2 = build_turn2_prompt(t1, out1, result_str)
-        (out2,) = engine.generate_all([t2], chunk=1)
-        rec["final_answer"] = out2.strip()
-        rec["canonical_answer"] = result_str   # resolver's own answer
+            # turn 2: feed the result back
+            t2 = build_turn2_prompt(t1, out1, result_str)
+            (out2,) = engine.generate_all([t2], chunk=1)
+            rec["final_answer"] = out2.strip()
+            rec["canonical_answer"] = result_str   # resolver's own answer
 
     # score
     if gold is not None and gold != "":
