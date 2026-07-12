@@ -452,6 +452,74 @@ def mk_F(q, work, code, answer, src="f_cards_seed"):
 
 
 # -------------------------------------------------------------------------
+# Type G (wiki) cards — Phase 7 #2: teach the model to ROUTE curated,
+# general-knowledge questions to the disk-backed wiki (TOOL wiki) instead of
+# the frozen gsm8k KB or run_code. Two card flavors (same as A/D split):
+#   - single-turn (route):  q = wiki key -> a = `TOOL wiki query="<key>"`
+#   - two-turn (echo):      q -> TOOL wiki query="key" ; result = body ;
+#                           target = body  (closes the loop, mirrors Type-D)
+# The wiki store (data/wiki/wiki.jsonl) is the single source of truth for the
+# targets, so a human-edited wiki entry automatically updates training targets.
+# -------------------------------------------------------------------------
+WIKI_PATH = os.path.join(ROOT, "data", "wiki", "wiki.jsonl")
+
+
+def load_wiki_cards(n_single, n_twoturn, seed=0):
+    """Draw up to `n_single` routing cards and `n_twoturn` echo cards from the
+    wiki store. Returns the combined list (each carries q/a per type)."""
+    if not os.path.exists(WIKI_PATH):
+        return []
+    entries = []
+    with open(WIKI_PATH) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                continue
+    if not entries:
+        return []
+
+    rng = random.Random(seed)
+    rng.shuffle(entries)
+
+    cards = []
+    # single-turn routing cards (the core new skill: q -> TOOL wiki)
+    for e in entries:
+        if len(cards) >= n_single:
+            break
+        key = e["key"].strip()
+        body = e["body"].strip()
+        if not key or not body:
+            continue
+        q = key
+        if len(q) > MAX_Q:
+            q = q[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
+        cards.append({"type": "G", "src": "wiki.route",
+                      "q": q, "a": f'TOOL wiki query="{q}"',
+                      "answer": body})
+    # two-turn echo cards (close the loop like Type-D)
+    for e in entries:
+        if len([c for c in cards if c["src"] == "wiki.echo"]) >= n_twoturn:
+            break
+        key = e["key"].strip()
+        body = e["body"].strip()
+        if not key or not body:
+            continue
+        q = key
+        if len(q) > MAX_Q:
+            q = q[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
+        call = f'TOOL wiki query="{q}"'
+        cards.append({"type": "G", "src": "wiki.echo",
+                      "q": q,
+                      "prompt_full": _two_turn_prompt(q, call, body),
+                      "a": body, "answer": body})
+    return cards
+
+
+# -------------------------------------------------------------------------
 # assemble
 # -------------------------------------------------------------------------
 def main():
@@ -485,6 +553,14 @@ def main():
                          "data/raw/f_cards_seed.txt [grade-1-3 word problems]")
     ap.add_argument("--f-seed", type=int, default=0,
                     help="deterministic seed for shuffling the Type-F seed file")
+    ap.add_argument("--g", type=int, default=0,
+                    help="how many Type-G (wiki routing) cards to draw from "
+                         "data/wiki/wiki.jsonl [Phase 7 #2: route to TOOL wiki]")
+    ap.add_argument("--g-twoturn", type=int, default=0,
+                    help="of --g, how many are two-turn echo cards "
+                         "(rest: single-turn routing)")
+    ap.add_argument("--g-seed", type=int, default=0,
+                    help="deterministic seed for shuffling the wiki store")
     args = ap.parse_args()
 
     a_gsm = load_gsm(args.gsm)
@@ -495,6 +571,9 @@ def main():
     e_cards = load_miss_two_turn(max(0, args.e - args.e_runcode),
                                  args.e_runcode, seed=args.e_seed) if args.e else []
     f_cards = load_f_cards(args.f, seed=args.f_seed) if args.f else []
+    g_cards = (load_wiki_cards(max(0, args.g - args.g_twoturn),
+                               args.g_twoturn, seed=args.g_seed)
+               if args.g else [])
 
     A = a_gsm + a_eval
     B = b_eval[:args.b_cap]
@@ -502,8 +581,9 @@ def main():
     D = d_cards
     E = e_cards
     F = f_cards
+    G = g_cards
 
-    cards = A + B + C + D + E + F
+    cards = A + B + C + D + E + F + G
     with open(args.out, "w") as f:
         for c in cards:
             f.write(json.dumps(c) + "\n")
@@ -522,6 +602,10 @@ def main():
           f"lookup={sum(1 for x in E if 'lookup' in x.get('src',''))} "
           f"seed={args.e_seed}]")
     print(f"  Type F (show-work): {len(F)}  [f_cards_seed seed={args.f_seed}]")
+    print(f"  Type G (wiki routing): {len(G)}  [route="
+          f"{sum(1 for x in G if 'route' in x.get('src',''))} "
+          f"echo={sum(1 for x in G if 'echo' in x.get('src',''))} "
+          f"seed={args.g_seed}]")
     print("  A:B:C ratio =",
           round(len(A) / max(1, len(B)), 2), ":",
           round(len(B) / max(1, len(B)), 2), ":",

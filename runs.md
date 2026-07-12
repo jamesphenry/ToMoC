@@ -6,12 +6,12 @@
 > Cost model: `watts/1000 * hours * $0.14/kWh`, watts = ~90W over server idle
 > (box idles ~120W, ~210W under GPU load). See AGENTS.md / wiki/BUGS.md.
 
-## Totals (all 44 passes)
+## Totals (all 47 passes)
 | metric | value |
 |--------|-------|
-| total cost | **$0.1727** |
-| total GPU time | 13.71 h |
-| avg cost / pass | $0.00392 |
+| total cost | **$0.2075** |
+| total GPU time | 16.47 h |
+| avg cost / pass | $0.00441 |
 | electricity rate | $0.14 / kWh |
 | assumed draw | 90 W over idle |
 
@@ -64,6 +64,9 @@ Sorted by pass id. `cost` is electricity only. `wall` = wall-clock seconds.
 | 42 | 02:14 | resolver-eval | adapters/v11 | 1319 | — | 1581.2 | — | 0.00553 |
 | 43 | 03:40 | train | smollm-360m-instruct | 3233 | 0.0992 | 4012.2 | 1655.1 | 0.01404 |
 | 44 | 04:06 | resolver-eval | adapters/v12 | 1319 | — | 1516.0 | — | 0.00531 |
+| 45 | 06:02 | train | smollm-360m-instruct | 3413 | 0.1119 | 3889.9 | 1655.1 | 0.01362 |
+| 46 | 07:05 | train | smollm-135m-instruct | 3489 | 0.1090 | 2019.3 | 1173.1 | 0.00707 |
+| 47 | 08:15 | train | smollm-360m-instruct | 3489 | 0.0984 | 4023.2 | 1655.1 | 0.01408 |
 
 ## Cost by category
 | category | passes | sum cost $ | sum GPU-h |

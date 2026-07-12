@@ -37,6 +37,9 @@ CALL_OPEN_RE = re.compile(r'TOOL\s+lookup\s+query="(.*)', re.DOTALL)
 # run_code form (Phase 5): TOOL run_code code="<expr>"
 RUNCODE_RE = re.compile(r'TOOL\s+run_code\s+code="(.*)"', re.DOTALL)
 RUNCODE_OPEN_RE = re.compile(r'TOOL\s+run_code\s+code="(.*)', re.DOTALL)
+# wiki form (Phase 7 #2): TOOL wiki query="<key>" -> curated disk-backed wiki
+WIKI_RE = re.compile(r'TOOL\s+wiki\s+query="(.*)"', re.DOTALL)
+WIKI_OPEN_RE = re.compile(r'TOOL\s+wiki\s+query="(.*)', re.DOTALL)
 # looser first-pass detector: did it emit anything resembling a TOOL line?
 TOOL_HINT_RE = re.compile(r'TOOL\s+(\w+)', re.IGNORECASE)
 
@@ -190,6 +193,13 @@ def parse_call(text):
     m4 = RUNCODE_OPEN_RE.search(text)
     if m4:
         return True, "run_code", m4.group(1), True
+    # wiki form (Phase 7 #2)
+    m5 = WIKI_RE.search(text)
+    if m5:
+        return True, "wiki", m5.group(1), True
+    m6 = WIKI_OPEN_RE.search(text)
+    if m6:
+        return True, "wiki", m6.group(1), True
     hint = TOOL_HINT_RE.search(text)
     if hint:
         # emitted a TOOL line but not well-formed

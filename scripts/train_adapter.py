@@ -80,11 +80,12 @@ class FlashcardDataset(Dataset):
             if a is None:
                 # Type B with no gold answer (coding/summarization): skip train target
                 continue
-            if c.get("type") in ("D", "E"):
+            if c.get("type") in ("D", "E") or c.get("src") == "wiki.echo":
                 # two-turn card: prompt_full already carries the full
                 # <cue>Question..Tool result: X\nFinal answer: context; the
                 # model is supervised to emit ONLY the final answer `a`.
-                # (D = hit branch; E = miss branch — both echo the result.)
+                # (D = hit branch; E = miss branch; wiki.echo = Type-G echo —
+                #  all echo the tool result back as the final answer.)
                 prompt = c["prompt_full"]
             else:
                 prompt = (

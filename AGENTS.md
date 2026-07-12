@@ -55,6 +55,20 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
     trail preserved: "Compute this: 48 - 5 + 20" → "This is subtraction: 48 - 5
     + 20. TOOL run_code code=\"48 - 5 + 20\"" → 63. **This is the new default
     best (360m).** Proof logs: probe_logs/probe_*_v12.md (8/8 audit pass).
+  - `adapters/v13/` — 360m, **+ Type-G (wiki routing)**: teaches the model to
+    route general-knowledge Qs to the disk-backed wiki (`TOOL wiki query=...`)
+    instead of answering from weights. Trained pass 45 (loss 0.112, 3413 cards,
+    180 G). **BUGGY — do not use as default.** Two defects found post-hoc:
+    (1) `train_adapter.py` only routed Type-D/E through the two-turn
+    `prompt_full` path, so the 90 `wiki.echo` cards trained as broken
+    single-turn → model emits the wiki body as a *direct answer*, final answer
+    on a routed wiki call comes back as `"TOOL."` garbage. (2) Routing skew:
+    wiki was ~90% "capital of X", so non-capital facts weren't routed.
+  - `adapters/v14/` — 360m, **v13 bug-fix**: echo fix (`wiki.echo` now in the
+    two-turn tuple) + **wiki diversified** to 128 entries (29 new non-capital
+    facts: science/history/nature/geography) + Type-G volume bumped to 256
+    (128 route + 128 echo). In training (pass 46). Goal: verify `TOOL wiki`
+    routes + echoes correctly (closes Phase 7 #2, read/route path).
   - Dataset: 3233 cards (1827 lookup / 300 answer / 300 run_code / 400 two-turn-D
     / 300 KB-miss-E / 106 show-work-F-as-compute).
 - **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
@@ -62,7 +76,7 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.1727** across 44 passes (README banner).
+- **Cost tracking live**: total **$0.2075** across 47 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;
@@ -110,6 +124,20 @@ python scripts/eval_gsm8k_hf.py --data ~/llm_eval/datasets/gsm8k_test.jsonl --ba
   (v10) exists so a show-your-work prefix can precede the TOOL call without
   truncation — verified no v8/v9 regression (v8@160 = 98.45% correct_vs_gold).
   **Diagnose before fixing.**
+- **BUG-010 (pre-existing, not a v14 regression)**: Type-B cards from
+  `load_from_eval()` (build_synth_cards.py:96) use `a = "<answer>"` as a
+  literal placeholder for "answer directly". The model memorizes the STRING
+  `<answer>` and emits it verbatim on out-of-knowledge direct-answer Qs (e.g.
+  "airspeed velocity of an unladen swallow" → turn1 = `<answer>`). Only
+  surfaces when neither KB nor wiki answers; v14's wiki routing hides it for
+  most general-knowledge Qs. Fix: give Type-B cards a real gold answer target
+  from the eval DB (if stored) or drop them. Out of scope for Phase 7 #2.
+- **BUG-009**: two-turn training cards must go through the `prompt_full` path in
+  `train_adapter.py` (line 83: `if c.get("type") in ("D","E") or c.get("src") == "wiki.echo"`).
+  v13 added Type-G `wiki.echo` cards but the guard only listed `("D","E")`, so the
+  echo cards trained as single-turn → model echoed the wiki body as a *direct
+  answer* and a routed wiki call's turn-2 came back as `"TOOL."`. Fix in v14:
+  include `wiki.echo` src. Any new two-turn card flavor MUST be added to that tuple.
 - The priming cue string in `train_adapter.py` and `eval_toolcall.py` MUST stay
   byte-identical or the call habit won't transfer.
 - `flashcards2.jsonl` is GENERATED (not hand-authored) — regenerate, don't edit.
