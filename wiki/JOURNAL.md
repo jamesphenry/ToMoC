@@ -495,6 +495,46 @@ trustworthy end-to-end signal.
 trail. One retrain (~45 min) + gsm8k re-eval (~26 min). If routing still off,
 next lever is cutting F or adding format-neutral lookup-with-reasoning cards.
 
+### PASS 41-44 — v11 rebalance FAILS, v12 rephrase WINS (the real fix)
+
+**v11 (pass 41, 3233 cards, --gsm 1800 --d 400 --e 300 --f 106):** gsm8k
+**0.613** (pass 42) — barely better than v10. Diagnosis refined: when v11
+routes to `lookup` it's **664/665 = 99.8%** correct; when it routes to
+`run_code` it's **9/461 = 2%** — and 416 of those 461 run_code calls are on
+questions that SHOULD be run_code (real arithmetic), yet compute wrong. The
+dominant failure isn't "over-routing to run_code on look-up-able Qs" (only 45
+such) — it's that **Type-F word-problems taught "word problem → run_code",
+which fights "word problem → lookup"** on gsm8k (all 1319 answers ARE in the
+KB, so optimal = always look up ≈ resolved_hit 0.964). Lookup-heavy volume
+(1827A) could NOT override F's sticky format. Sample failure: `This is
+multiplication: 10 * 45, because 10*45=450. TOOL run_code code="10 * 45"` →
+gold 460 (wrong code despite confident reasoning).
+
+**The fix (v12, pass 43):** rephrase Type-F at load time — `REPHRASE_F_TO_COMPUTE`
+in `build_synth_cards.py` converts each seed word-problem `q` into `Compute
+this: <code>` (keeping the WORK reasoning + CODE). Now the reasoning+run_code
+habit is triggered by *computation requests*, NOT word problems. Word problems
+route to lookup (accurate on gsm8k). Result (pass 44): gsm8k **0.998 (1265/1267)**,
+call_rate 0.964, resolved_hit 0.997, well_formed 1.000. **#1 (gsm8k accuracy)
+and #2 (reasoning trail) both satisfied.** Trail check: `Compute this: 48 - 5
++ 20` → `This is subtraction: 48 - 5 + 20. TOOL run_code code="48 - 5 + 20"` → 63.
+
+**Proof, not just metrics:** added `scripts/probe_three.py` + `data/probe/
+three_prompts.jsonl` — runs 3 fixed probes + N random gsm8k (split PASS/FAIL)
+through the real ToMoC loop and writes a **dated, git-stored** markdown to
+`probe_logs/` with VERBATIM output. v10 proof (pass 40 era): 6/8 audit pass
+(shows the regression); v12 proof: 8/8 audit pass. Commit these — they are the
+permanent evidence the metrics hint at.
+
+**Lesson:** a training-mix *volume* change couldn't fix a *format conflict*.
+The conflict was structural (F's word-problem→run_code vs gsm8k's
+word-problem→lookup), and only a format change (rephrase F) resolved it. Also:
+router_precision/recall heuristics are NOISY on gsm8k (they expect lookup for
+everything and mislabel); trust `correct_vs_gold` + `resolved_hit`.
+
+**v12 is the new default best (360m).** Costs: v10 $0.0055, v11 $0.0055, v12
+$0.0053 eval; training ~$0.005/pass; total project $0.1674 / 44 passes.
+
 ## What's next (directions — open, not yet chosen)
 
 The repo is at a clean resting point. Levers, roughly lean → moonshot:

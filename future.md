@@ -113,6 +113,31 @@ cheap, VRAM isn't." Functions are knowledge.
   as a pragmatic bootstrap. Note the tension: "from scratch" is a big lift; the
   ToMoC tool-layer softens it (capability comes from tools, not the base model).
 
+## Resources for from-scratch (collected, not yet used)
+- **SmolLM corpus** (HuggingFaceTB): https://huggingface.co/datasets/HuggingFaceTB/smollm-corpus
+  — the exact pretraining corpus used to build the smolLM base models
+  (cosmopedia / fineweb-edu / etc.). When we eventually pretrain our own base
+  (North Star), this is the reference corpus to bootstrap from / compare against.
+  Saved 2026-07-12 on user's pointer.
+- **SmolLM repo** (huggingface/smollm): https://github.com/huggingface/smollm
+  — official repo: training code, tokenizer, data recipes for the smolLM family.
+  Reference for the full from-scratch build pipeline.
+- **OpenHermes-2.5** (teknium): https://huggingface.co/datasets/teknium/OpenHermes-2.5
+  — general instruct/SFT corpus (1M+ multi-turn). For the instruction-tuning stage.
+- **self-oss-instruct-sc2-exec-filter-50k** (bigcode):
+  https://huggingface.co/datasets/bigcode/self-oss-instruct-sc2-exec-filter-50k
+  — self-instruct code corpus w/ exec-filter. Relevant if we want code capability.
+- **Magpie-Pro-300K-Filtered** (Magpie-Align):
+  https://huggingface.co/datasets/Magpie-Align/Magpie-Pro-300K-Filtered
+  — large filtered alignment/instruct corpus. For the alignment/SFT mix.
+- **smollm2-135-implementation** (abi2024):
+  https://github.com/abi2024/smollm2-135-implementation
+  — minimal from-scratch 135m impl (architecture + training). Good study reference
+  for the eventual own-base build (matches our 135m target size).
+- All above are **reference only** for the eventual from-scratch pretrain + SFT +
+  alignment stack. Not used by the current LoRA tool-calling experiments.
+  Saved 2026-07-12 on user's pointer.
+
 Possible end-state: a tiny 135m router (v1 LoRA habit) that dispatches to
 external ToMoC experts (lookup, calculate, LLM-wiki) via a homelab tooling
 framework; a reasoning scratchpad self-corrects calls; the KB is user-correctable

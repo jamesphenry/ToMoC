@@ -1,5 +1,5 @@
-> ## 🔌 Sovereign compute cost so far: **$0.1333**
-> 40 training/eval passes · 10.58 GPU-hrs · 14¢/kWh · ~90W over server idle
+> ## 🔌 Sovereign compute cost so far: **$0.1727**
+> 44 training/eval passes · 13.71 GPU-hrs · 14¢/kWh · ~90W over server idle
 > Refresh live: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 > _Sovereign intelligence is cheap — this whole lab (39 passes: 8 adapters, 3 base sizes, the full two-tool ToMoC loop closed end-to-end) cost about a dime of electricity._
 ---

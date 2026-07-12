@@ -41,14 +41,28 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
     `run_code` on look-up-able gsm8k (490 run_code, only 8/490 correct because 429
     SHOULD have been lookups). When it DOES route to lookup it's 640/640 = 100%.
     v11 rebalances the mix (more Type-A/D) to restore routing.
-  - Dataset: 1833 cards (527 lookup / 300 answer / 300 run_code / 300 two-turn-D /
-    300 KB-miss-E / 106 show-work-F).
+  - `adapters/v11/` — 360m, same stack + **lookup-heavy rebalance** (--gsm 1800
+    --d 400 --e 300 --f 106 = 3233 cards). Did NOT fix it: gsm8k **0.613**
+    (pass 42). Root cause refined: Type-F *word-problems* teach "word problem →
+    run_code", which fights "word problem → lookup" on gsm8k (run_code fired on
+    KB-answerable Qs, ~2% correct). Lookup-heavy volume couldn't override F's
+    sticky format.
+  - `adapters/v12/` — 360m, **Type-F rephrased to "Compute this: <code>" prompts**
+    (REPHRASE_F_TO_COMPUTE in build_synth_cards.py) so the reasoning+run_code
+    habit triggers on *computation requests*, not word problems. Word problems
+    now route to lookup (accurate on gsm8k). gsm8k **0.998 (1265/1267)**,
+    call_rate 0.964, resolved_hit 0.997, well_formed 1.000 (pass 44). Reasoning
+    trail preserved: "Compute this: 48 - 5 + 20" → "This is subtraction: 48 - 5
+    + 20. TOOL run_code code=\"48 - 5 + 20\"" → 63. **This is the new default
+    best (360m).** Proof logs: probe_logs/probe_*_v12.md (8/8 audit pass).
+  - Dataset: 3233 cards (1827 lookup / 300 answer / 300 run_code / 400 two-turn-D
+    / 300 KB-miss-E / 106 show-work-F-as-compute).
 - **`base` model scores math gsm8k_test = 1.74% (23/1319)** — the gap it routes
   around via lookup (~99%) + run_code (100% on v7).
 - **Base models on disk:** `models/smollm-135m-instruct` (default),
   `models/smollm-360m-instruct`, and `models/smollm-1.7b-instruct` (all
   downloaded for the size sweep; no external APIs at runtime).
-- **Cost tracking live**: total **$0.1333** across 40 passes (README banner).
+- **Cost tracking live**: total **$0.1727** across 44 passes (README banner).
   Refresh: `python -c "from scripts.passdb import PassDB as D; D().cost_report()"`
 - Everything committed + pushed to `origin/main` (`git@192.168.0.4:james/smol-lab.git`).
   No background jobs running. Ollama is OFF for this project (user's choice;

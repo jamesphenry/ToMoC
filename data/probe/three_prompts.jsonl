@@ -1,0 +1,3 @@
+{"q": "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?", "gold": "72", "label": "lookup", "kind": "lookup-hit"}
+{"q": "A bakery made 3 trays of cookies with 12 cookies on each tray. Then they sold 5 cookies. How many cookies are left?", "gold": "31", "label": "run_code", "kind": "arithmetic"}
+{"q": "What year did the first person land on the moon?", "gold": "", "label": "kb-miss", "kind": "honesty-proof"}

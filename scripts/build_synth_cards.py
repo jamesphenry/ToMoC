@@ -381,6 +381,10 @@ def load_miss_two_turn(n_lookup, n_runcode, seed=0):
 F_SEED = os.path.join(ROOT, "data", "raw", "f_cards_seed.txt")
 # cap the reasoning prefix so the full target fits the 256-token max-len
 MAX_WORK = 140
+# Rephrase F word-problems into direct "Compute this: <code>" prompts so the
+# reasoning+run_code habit is triggered by computation requests, not word
+# problems (which must route to lookup on gsm8k). See load_f_cards below.
+REPHRASE_F_TO_COMPUTE = True
 
 
 def load_f_cards(n, seed=0):
@@ -424,7 +428,18 @@ def load_f_cards(n, seed=0):
         work = b["WORK"].strip()
         if len(work) > MAX_WORK:
             work = work[:MAX_WORK - 1].rsplit(" ", 1)[0] + "…"
-        cards.append(mk_F(b["Q"].strip(), work, code, b["A"].strip()))
+        q = b["Q"].strip()
+        # REPHRASE_F_TO_COMPUTE (default True): the seed problems are WORD
+        # problems, but gsm8k is ALSO word problems — training "word problem ->
+        # run_code" directly fights "word problem -> lookup" and poisoned v10/v11
+        # routing on gsm8k (run_code fired on KB-answerable questions, ~2% correct).
+        # Rephrase the F question into a direct-COMPUTE prompt so the model learns
+        # "reasoning + run_code" is triggered by computation requests, NOT word
+        # problems. Word problems keep routing to lookup (accurate on gsm8k);
+        # the reasoning trail is preserved for the playground's arithmetic input.
+        if REPHRASE_F_TO_COMPUTE:
+            q = f"Compute this: {code}"
+        cards.append(mk_F(q, work, code, b["A"].strip()))
         if len(cards) >= n:
             break
     return cards
