@@ -115,16 +115,15 @@ python scripts/eval_gsm8k_hf.py --data ~/llm_eval/datasets/gsm8k_test.jsonl --ba
 - `flashcards2.jsonl` is GENERATED (not hand-authored) — regenerate, don't edit.
 - `adapters/`, `models/`, `logs/`, `benchmarks/*.db` are gitignored (artifacts).
 
-## Open next step (PHASE 6b DONE, v10 trained — 2026-07-11)
-The model now has TWO tools. `lookup` (fetch) and `run_code` (compute) both
-resolve end-to-end, with a closed two-turn loop (call → resolve → final answer)
-and graceful KB-miss honesty (Type-E). v10 adds Type-F (show-your-work) on top of
-the v8/v9 stack; gold-labeled flashcard router quality is **97.2% precision /
-96.8% recall** (see `eval_resolver.py --kind flashcard`, new router metrics).
-Verified across a 3-way base sweep (135m / 360m / 1.7B):
-- `lookup`: emits `TOOL lookup query="..."` → sovereign KB resolver
-  (`scripts/tool_resolver.py`, 8892 entries, zero external APIs) → **~99%**
-  resolved-correct on gsm8k_test at every size (v7 1253/1266 = 99.0%).
+## Open next step (PHASE 7 IN PROGRESS — 2026-07-12; v12 default best)
+Phase 6b closed the ToMoC loop (v8). v12 (360m + Type-E + Type-F-as-compute)
+is the new default best on gsm8k (0.998, pass 44). Now building **Phase 7: a
+disk-backed, read/write LLM-wiki** as a third knowledge source. The
+READ path is live (`lookup` falls through to the wiki after the frozen KB
+misses); the WRITE path is human-in-the-loop for now (no model autonomy yet —
+sovereign, no poison risk). The model does NOT yet emit `TOOL wiki` — that
+needs a `wiki_write`/`wiki` LoRA capability + retrain (separate fork, TBD).
+
 - `run_code`: emits `TOOL run_code code="<expr>"` → restricted executor
   (`scripts/sandbox.py`) computes it. Coverage scales with base size:
   v5b (135m) 89.0% (266/299) → v6 (360m) 96.7% (289/299) → **v7 (1.7B) 100%
@@ -218,6 +217,20 @@ python -u scripts/orchestrate.py --model adapters/v8 \
 python -u scripts/orchestrate.py --model adapters/v8 \
         --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
 ```
+
+## Phase 7 — disk-backed LLM-wiki (READ/WRITE)
+- Store: `data/wiki/wiki.jsonl` — one JSON object per line:
+  `{"key", "body", "source", "created", "updated"}`. Human-editable, NOT frozen.
+- READ path (live, no retrain): `tool_resolver.lookup()` checks the static
+  gsm8k/mmlu KB first, then falls through to the wiki. So the existing
+  `TOOL lookup` habit immediately benefits from wiki knowledge. Dedicated
+  `TOOL wiki` resolves the wiki directly (same resolver API).
+- WRITE path (human-in-the-loop, sovereign): `tool_resolver.py --wiki-add KEY
+  BODY` (alias `--wiki-set`) upserts an entry atomically. The model does NOT
+  autonomously write yet — that needs a `wiki_write` tool + LoRA retrain
+  (flag-to-dataset style; see future.md). No poison risk: every write is human.
+- Fuzzy match: token-set Jaccard over keys+bodies, `WIKI_FUZZY_THRESH=0.5`
+  (looser than the KB's 0.7 because the wiki is few + curated).
 
 ## Card schema (build_synth_cards.py)
 - Type A (lookup):  `a = TOOL lookup query="<verbatim q>"`

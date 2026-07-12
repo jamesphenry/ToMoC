@@ -191,7 +191,112 @@ class KB:
                 "matched": None, "method": None}
 
 
-# ---- dispatch seam (future tools plug in here) ---------------------------
+# ---- Phase 7: disk-backed, read/write wiki --------------------------------
+# A second knowledge source the model can READ (lookup falls through to it
+# after the frozen gsm8k/mmlu KB misses) and the human can WRITE (no model
+# autonomy yet — sovereign, no poison risk). Lives at data/wiki/wiki.jsonl.
+WIKI_PATH = os.path.join(ROOT, "data", "wiki", "wiki.jsonl")
+WIKI_FUZZY_THRESH = 0.5  # looser than KB: wiki entries are few + human-curated
+
+
+class WikiKB:
+    """Editable, disk-backed wiki. {key, body, source, created, updated}."""
+    _inst = None
+
+    @classmethod
+    def get(cls, path=WIKI_PATH):
+        if cls._inst is None:
+            cls._inst = WikiKB(path)
+        return cls._inst
+
+    def __init__(self, path=WIKI_PATH):
+        self.path = path
+        self.entries = []          # list of dicts (in file order)
+        self.load()
+
+    def load(self):
+        self.entries = []
+        if not os.path.exists(self.path):
+            return
+        with open(self.path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    self.entries.append(json.loads(line))
+                except Exception:
+                    continue
+        # index by normalized key for exact lookups
+        self._idx = {norm(e.get("key", "")): e for e in self.entries}
+
+    def resolve(self, query: str):
+        """Exact key match, else fuzzy token Jaccard over keys+bodies."""
+        if not query or not query.strip():
+            return {"verdict": "empty", "answer": None,
+                    "matched": None, "method": "wiki"}
+        nq = norm(query)
+        # 1. exact key
+        if nq in self._idx:
+            e = self._idx[nq]
+            return {"verdict": "hit", "answer": e["body"],
+                    "matched": e.get("key"), "method": "wiki-exact"}
+        # 2. fuzzy over key tokens (and body tokens as a weaker signal)
+        qt = toks(query)
+        if qt:
+            best, best_e, best_m = 0.0, None, None
+            for e in self.entries:
+                kt = toks(e.get("key", ""))
+                bt = toks(e.get("body", ""))
+                jk = len(qt & kt) / len(qt | kt) if kt else 0.0
+                jb = len(qt & bt) / len(qt | bt) if bt else 0.0
+                j = max(jk, jb * 0.9)   # body match weighted slightly lower
+                if j > best:
+                    best, best_e, best_m = j, e, ("wiki-key" if jk >= jb else "wiki-body")
+            if best >= WIKI_FUZZY_THRESH:
+                return {"verdict": "hit", "answer": best_e["body"],
+                        "matched": best_e.get("key"),
+                        "method": f"{best_m} jaccard={best:.2f}"}
+        return {"verdict": "miss", "answer": None,
+                "matched": None, "method": "wiki"}
+
+    def write(self, key: str, body: str, source: str = "human"):
+        """Upsert an entry by key. Returns ('created'|'updated', entry)."""
+        nk = norm(key)
+        now = __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for e in self.entries:
+            if norm(e.get("key", "")) == nk:
+                e["body"] = body
+                e["source"] = source
+                e["updated"] = now
+                self._save()
+                return "updated", e
+        e = {"key": key, "body": body, "source": source,
+             "created": now, "updated": now}
+        self.entries.append(e)
+        self._save()
+        return "created", e
+
+    def _save(self):
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            for e in self.entries:
+                fh.write(json.dumps(e, ensure_ascii=False) + "\n")
+        os.replace(tmp, self.path)   # atomic
+
+
+def lookup(query: str, kb: KB = None, wiki: WikiKB = None):
+    """Phase 7 READ path: static KB first, then fall through to the wiki."""
+    if kb is None:
+        kb = KB.get()
+    r = kb.resolve(query)
+    if r["verdict"] == "hit":
+        return r
+    if wiki is None:
+        wiki = WikiKB.get()
+    return wiki.resolve(query)
 def resolve(tool: str, query: str, kb: KB = None):
     """Entry point. tool-agnostic: route to the right backend by name.
 
@@ -205,7 +310,9 @@ def resolve(tool: str, query: str, kb: KB = None):
     if kb is None:
         kb = KB.get()
     if tool == "lookup":
-        return kb.resolve(query)
+        return lookup(query, kb=kb)          # Phase 7: KB -> wiki fallthrough
+    if tool == "wiki":
+        return WikiKB.get().resolve(query)
     if tool == "run_code":
         # Guard: a run_code call with empty/None/non-string code must not reach
         # ast.parse (compile(None) crashes). Model sometimes emits
@@ -236,12 +343,30 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("query", nargs="?", help="query text to resolve")
     ap.add_argument("--tool", default="lookup",
-                    help="tool backend to route to (lookup | run_code)")
+                    help="tool backend to route to (lookup | wiki | run_code)")
     ap.add_argument("--miss", dest="force_miss", action="store_true",
                     help="also show a guaranteed-miss example")
     ap.add_argument("--stats", action="store_true",
                     help="print KB size stats and exit")
+    # Phase 7 wiki write path (human-in-the-loop, sovereign)
+    ap.add_argument("--wiki-add", nargs=2, metavar=("KEY", "BODY"),
+                    help="add a wiki entry (key + body); upserts if key exists")
+    ap.add_argument("--wiki-set", nargs=2, metavar=("KEY", "BODY"),
+                    help="alias for --wiki-add (explicit upsert)")
+    ap.add_argument("--wiki-stats", action="store_true",
+                    help="print wiki entry count and exit")
     args = ap.parse_args()
+
+    if args.wiki_add or args.wiki_set:
+        key, body = (args.wiki_add or args.wiki_set)
+        action, e = WikiKB.get().write(key, body, source="human")
+        print(json.dumps({"action": action, **e}, ensure_ascii=False))
+        return
+
+    if args.wiki_stats:
+        w = WikiKB.get()
+        print(f"wiki entries : {len(w.entries)}")
+        return
 
     if args.stats:
         kb = KB.get()

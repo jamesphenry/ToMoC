@@ -22,8 +22,11 @@
   `lookup` tool searches — offline, deterministic, perfect for first adapter.
 - SearXNG for REAL web lookup later (live, needs a server; adds flakiness —
   keep out of v1 training/eval).
-- LLM-wiki-style knowledge base: a structured wiki the model can query. Details
-  TBD (corpus shape, retrieval method). Discuss later.
+- LLM-wiki-style knowledge base: a structured wiki the model can query.
+  **STARTED 2026-07-12 (Phase 7 substrate):** `data/wiki/wiki.jsonl` + `WikiKB`
+  in `tool_resolver.py`. READ path live (`lookup` falls through to wiki, no
+  retrain); WRITE path is human-in-the-loop (`--wiki-add`) for now. Model does
+  NOT yet emit `TOOL wiki` — that needs a LoRA capability + retrain (see below).
 
 ## Baked-in wiki that DEFINES tools (hypothetical, user curiosity)
 - Idea: an "LLM wiki" knowledge base that is itself baked into the model, from
@@ -90,8 +93,10 @@ cheap, VRAM isn't." Functions are knowledge.
 - CORRECT-AND-UPDATE-KB: ability to correct the model with VERIFIED facts; it
   should update its own knowledge base (the disk-backed wiki), not its weights.
   -> Embodies "disks cheap, VRAM isn't": knowledge lives on disk, fix it there.
-  -> Implies the KB needs a write path (not just lookup), plus a verification
-  gate so bad corrections don't poison it. Post-v1, post-tooling-framework.
+  -> **WRITE path live 2026-07-12 (Phase 7):** `tool_resolver.py --wiki-add` upserts
+     human-authored entries atomically. Model autonomy (auto-write from a
+     `wiki_write` tool call) is NOT yet built — that needs a LoRA capability +
+     retrain + a verification gate so bad corrections don't poison the wiki.
 - FLAG-TO-DATASET (user idea, 2026-07-11 — human-in-the-loop correction loop):
   When the model gets something wrong (or is unsure), instead of it auto-writing
   the KB, the USER tells the model something like "flag that" so it can be
