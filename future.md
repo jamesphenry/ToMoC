@@ -142,6 +142,12 @@ cheap, VRAM isn't." Functions are knowledge.
 - All above are **reference only** for the eventual from-scratch pretrain + SFT +
   alignment stack. Not used by the current LoRA tool-calling experiments.
   Saved 2026-07-12 on user's pointer.
+- **Downloaded 2026-07-12 to `~/datasets/` (5/6, ~2.5GB, git-untracked):**
+  OpenHermes-2.5 (1.9G), Magpie-Pro-300K-Filtered (538M),
+  self-oss-instruct-sc2-exec-filter-50k (87M), smollm repo (13M, LFS skipped),
+  smollm2-135-implementation (3.7M). **SmolLM corpus DEFERRED** — it is 673GB
+  (won't fit 361GB free); pull subsets (cosmopedia-v2 / a fineweb-edu shard)
+  selectively if/when we actually pretrain.
 
 Possible end-state: a tiny 135m router (v1 LoRA habit) that dispatches to
 external ToMoC experts (lookup, calculate, LLM-wiki) via a homelab tooling
