@@ -23,6 +23,7 @@ right function," and the function is the knowledge. That habit lifts gsm8k_test 
 capability audit across adapters v1→v17 is in
 [benchmarks/adapter_comparison.md](benchmarks/adapter_comparison.md) (the `math_gsm`
 column there is a 15-item regex sample, *not* the full gsm8k_test).
+Full method write-up: [whitepaper.md](whitepaper.md).
 
 ## A note on how this was built
 
