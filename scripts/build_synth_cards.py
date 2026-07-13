@@ -564,13 +564,15 @@ def load_write_cards(n, seed=0):
             break
         key = e["key"].strip()
         body = e["body"].strip()
+        category = (e.get("category") or "general").strip() or "general"
         if not key or not body:
             continue
         q = rng.choice(templates).format(key=key, body=body)
         # truncate to keep within MAX_Q so the model learns to close quotes
         if len(q) > MAX_Q:
             q = q[:MAX_Q - 1].rsplit(" ", 1)[0] + "…"
-        call = f'TOOL wiki_write key="{key}" body="{body}"'
+        call = (f'TOOL wiki_write key="{key}" body="{body}" '
+                f'category="{category}"')
         cards.append({"type": "H", "src": "wiki.write",
                       "q": q, "a": call, "answer": body})
     return cards

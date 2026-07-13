@@ -41,12 +41,14 @@ RUNCODE_OPEN_RE = re.compile(r'TOOL\s+run_code\s+code="(.*)', re.DOTALL)
 WIKI_RE = re.compile(r'TOOL\s+wiki\s+query="(.*)"', re.DOTALL)
 WIKI_OPEN_RE = re.compile(r'TOOL\s+wiki\s+query="(.*)', re.DOTALL)
 # wiki_write form (Phase 7 #1, FLAG-TO-DATASET): TOOL wiki_write key="<k>" body="<b>"
-# Parsed but GATED — resolve() returns a proposed write, never mutates the store.
-# Tolerant: accept `body=` or the model's occasional `body text=` drift.
+# [optional category="<c>"] Parsed but GATED — resolve() returns a proposed
+# write, never mutates the store. Tolerant of `body text=` drift (BUG-011).
 WIKIWRITE_RE = re.compile(
-    r'TOOL\s+wiki_write\s+key="(.*?)"\s+body(?:\s+text)?="(.*)"', re.DOTALL)
+    r'TOOL\s+wiki_write\s+key="(.*?)"\s+body(?:\s+text)?="(.*?)"'
+    r'(?:\s+category="(.*?)")?', re.DOTALL)
 WIKIWRITE_OPEN_RE = re.compile(
-    r'TOOL\s+wiki_write\s+key="(.*?)"\s+body(?:\s+text)?="(.*)', re.DOTALL)
+    r'TOOL\s+wiki_write\s+key="(.*?)"\s+body(?:\s+text)?="(.*)'
+    r'(?:\s+category="(.*?)")?', re.DOTALL)
 # looser first-pass detector: did it emit anything resembling a TOOL line?
 TOOL_HINT_RE = re.compile(r'TOOL\s+(\w+)', re.IGNORECASE)
 
@@ -207,13 +209,15 @@ def parse_call(text):
     m6 = WIKI_OPEN_RE.search(text)
     if m6:
         return True, "wiki", m6.group(1), True
-    # wiki_write form (Phase 7 #1, gated) — pack key\bǎody for resolve()
+    # wiki_write form (Phase 7 #1, gated) — pack key\u0001body\u0001category
     m7 = WIKIWRITE_RE.search(text)
     if m7:
-        return True, "wiki_write", m7.group(1) + "\u0001" + m7.group(2), True
+        cat = (m7.group(3) or "").strip()
+        return True, "wiki_write", m7.group(1) + "\u0001" + m7.group(2) + "\u0001" + cat, True
     m8 = WIKIWRITE_OPEN_RE.search(text)
     if m8:
-        return True, "wiki_write", m8.group(1) + "\u0001" + m8.group(2), True
+        cat = (m8.group(3) or "").strip()
+        return True, "wiki_write", m8.group(1) + "\u0001" + m8.group(2) + "\u0001" + cat, True
     hint = TOOL_HINT_RE.search(text)
     if hint:
         # emitted a TOOL line but not well-formed

@@ -55,6 +55,13 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
     trail preserved: "Compute this: 48 - 5 + 20" → "This is subtraction: 48 - 5
     + 20. TOOL run_code code=\"48 - 5 + 20\"" → 63. **This is the new default
     best (360m).** Proof logs: probe_logs/probe_*_v12.md (8/8 audit pass).
+  - `adapters/v17/` — 360m, **+ Type-H with `category=`**: model emits
+    `TOOL wiki_write key="..." body="..." category="..."` (suggests a
+    category, human approves/changes). Same sovereign gate as v16 (proposed
+    write only; `/approve` or `--wiki-write ... --approve` to commit). Plus
+    the **SearXNG web fallback** folded into `lookup` (KB→vault→web) so v17
+    answers unknowns live with NO extra tool training. 3617-card set (128 H
+    now carry `category=`). **Current best 360m adapter (pass 50).**
   - `adapters/v16/` — 360m, **+ Type-H (wiki WRITE, gated)**: model can
     EMIT `TOOL wiki_write key="..." body="..."` but the resolver only
     returns a *proposed* write (verdict `proposed_write`) — it NEVER mutates
@@ -62,8 +69,7 @@ reasoning > raw smarts; sovereignty (homelab-only, no external APIs).
     BODY --approve` to commit. Sovereign: no silent self-poisoning. 128
     Type-H cards (from the wiki store). 3617-card set, loss 0.135, pass 49.
     Verified: emits the call on save-instructions; gate blocks all
-    auto-mutation (malformed/truncated → `malformed_write`). **Current best
-    360m adapter.**
+    auto-mutation (malformed/truncated → `malformed_write`).
   - `adapters/v15/` — 360m, BUG-010 fix (real gold answers in Type-B).
   - `adapters/v14/` — 360m, v13 bug-fix (echo + wiki diversity). Superseded by
     v15 (which also fixes BUG-010). Keep for lineage.
@@ -247,22 +253,31 @@ python -u scripts/orchestrate.py --model adapters/v8 \
         --data ~/llm_eval/datasets/gsm8k_test.jsonl --kind gsm8k
 ```
 
-## Phase 7 — disk-backed LLM-wiki (READ/WRITE)
-- Store: `data/wiki/wiki.jsonl` — one JSON object per line:
-  `{"key", "body", "source", "created", "updated"}`. Human-editable, NOT frozen.
+## Phase 7 — disk-backed LLM-wiki vault (READ/WRITE) + web fallback
+- **Store = Obsidian-style markdown vault** `data/vault/<category>/<slug>.md`:
+  each note has YAML frontmatter `{key, category, source, created, updated}`
+  + a markdown body. Folders ARE categories (e.g. `data/vault/science/`).
+  `WikiKB` walks `data/vault/**/*.md`, parses frontmatter, builds the same
+  exact+fuzzy index. Human-editable, NOT frozen. One-time migration of the
+  old `data/wiki/wiki.jsonl` (128 entries) done via `tool_resolver.py --migrate`.
 - READ path (live, no retrain): `tool_resolver.lookup()` checks the static
-  gsm8k/mmlu KB first, then falls through to the wiki. So the existing
-  `TOOL lookup` habit immediately benefits from wiki knowledge. Dedicated
-  `TOOL wiki` (Type-G cards, v14) resolves the wiki directly and the model
-  ECHOES the body as its final answer.
+  gsm8k/mmlu KB first → then the vault → then a **live SearXNG web search**
+  (`web()`, reads `SEARXNG_URL` env). The existing `TOOL lookup` habit
+  therefore answers unknowns live. Web results are shown as the final answer
+  but **never auto-saved** (no poison). Dedicated `TOOL wiki` (Type-G, v14)
+  resolves the vault directly; the model ECHOES the body as its final answer.
 - WRITE path (autonomous PROPOSE + human-APPROVE gate, sovereign): the model
-  emits `TOOL wiki_write key="..." body="..."` (Type-H cards, v16). The
-  resolver returns a *proposed* write (`verdict=proposed_write`) and NEVER
-  mutates the store. A human commits via `tool_resolver.py --wiki-write KEY
-  BODY --approve`. No poison risk: the model can propose, never poison.
+  emits `TOOL wiki_write key="..." body="..." category="..."` (Type-H cards,
+  v17). The `category=` is the **MODEL'S SUGGESTION** — the human approves or
+  changes it. The resolver returns a *proposed* write
+  (`verdict=proposed_write`) and NEVER mutates the store. In `--chat` the
+  loop shows the suggested category, lets you retype a category, then ASKS
+  "save to vault? [y/N]" — no automatic saves. A human commits via
+  `tool_resolver.py --wiki-write KEY BODY --category <cat> --approve`.
+  No poison risk: the model can propose, never poison.
   (Legacy human-only writes still work: `--wiki-add`/`--wiki-set`.)
 - Fuzzy match: token-set Jaccard over keys+bodies, `WIKI_FUZZY_THRESH=0.5`
-  (looser than the KB's 0.7 because the wiki is few + curated).
+  (looser than the KB's 0.7 because the vault is few + curated).
 
 ## Card schema (build_synth_cards.py)
 - Type A (lookup):  `a = TOOL lookup query="<verbatim q>"`

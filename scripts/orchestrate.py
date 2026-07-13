@@ -274,26 +274,41 @@ def main():
                 continue
             rec = run_question(engine, kb, q, None, verbose=False)
             chat_display(rec)
-            # Phase 7 #1: if the model PROPOSED a wiki write, remember it and
-            # offer the human the approve gate right here (no silent commit).
+            # Phase 7 #1: if the model PROPOSED a wiki write, confirm the
+            # suggested category (approve/change) and ask to save (no silent
+            # commit). The model SUGGESTS a category; the human owns it.
             if rec.get("resolved") and \
                     rec["resolved"].get("verdict") == "proposed_write":
-                last_proposal[0] = rec["resolved"]
-                print("\n  ⚠ model proposes a wiki write (NOT committed).")
-                print('  approve? type "/approve" (or just "y"), or anything'
-                      " else to decline.")
+                prop = rec["resolved"]
+                last_proposal[0] = prop
+                sug = prop.get("category") or "general"
+                key = prop.get("matched")
+                print("\n  ⚠ model proposes a wiki write (NOT saved yet).")
+                print(f"    key      : {key!r}")
+                print(f"    suggested category: {sug!r}")
+                # 1) category: approve or change
                 try:
-                    ans = input("  approve> ").strip().lower()
+                    cat_ans = input(
+                        f"  category [Enter={sug!r} / type new]: ").strip()
                 except (EOFError, KeyboardInterrupt):
-                    ans = ""
-                if ans in ("y", "yes", "/approve"):
+                    cat_ans = ""
+                category = cat_ans or sug
+                prop["entry"]["category"] = category
+                # 2) save? ask explicitly — never automatic
+                try:
+                    save_ans = input(
+                        f"  save to vault (under '{category}')? [y/N]: "
+                    ).strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    save_ans = ""
+                if save_ans in ("y", "yes"):
                     action, e = WikiKB.get().commit_write(
-                        rec["resolved"]["entry"], source="model-approved")
-                    print(f"  APPROVED -> {action}: {e.get('key')!r} = "
-                          f"{e.get('body')!r}")
+                        prop["entry"], source="model-approved")
+                    print(f"  SAVED -> {action}: data/vault/{e.get('category')}/"
+                          f"{os.path.basename(e.get('path', ''))}")
                     last_proposal[0] = None
                 else:
-                    print("  declined — write stays a proposal (use /approve "
+                    print("  not saved — proposal discarded (use /approve "
                           "later, or ignore).")
             transcript.append({
                 "q": q,

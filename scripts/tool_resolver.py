@@ -191,44 +191,97 @@ class KB:
                 "matched": None, "method": None}
 
 
-# ---- Phase 7: disk-backed, read/write wiki --------------------------------
+# ---- Phase 7: disk-backed, read/write wiki (Obsidian-style markdown vault) -
 # A second knowledge source the model can READ (lookup falls through to it
-# after the frozen gsm8k/mmlu KB misses) and the human can WRITE (no model
-# autonomy yet — sovereign, no poison risk). Lives at data/wiki/wiki.jsonl.
-WIKI_PATH = os.path.join(ROOT, "data", "wiki", "wiki.jsonl")
-WIKI_FUZZY_THRESH = 0.5  # looser than KB: wiki entries are few + human-curated
+# after the frozen gsm8k/mmlu KB misses, and after that to a live web search)
+# and the human can WRITE (sovereign, no poison risk). Lives as a vault of
+# markdown notes: data/vault/<category>/<slug>.md, each with YAML frontmatter
+# (key, category, source, created, updated) + a markdown body. Obsidian-friendly.
+WIKI_PATH = os.path.join(ROOT, "data", "wiki", "wiki.jsonl")   # legacy (migrated)
+VAULT_ROOT = os.path.join(ROOT, "data", "vault")
+DEFAULT_CATEGORY = "general"
+WIKI_FUZZY_THRESH = 0.5  # looser than KB: vault notes are few + human-curated
 
+
+def slugify(s: str) -> str:
+    """Filesystem-safe slug from a key (lowercase, hyphenated, ascii)."""
+    s = (s or "").lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")[:80] or "note"
+
+
+def parse_frontmatter(text: str):
+    """Split a markdown note into (meta:dict, body:str). Reads a leading
+    YAML `---` block if present; otherwise meta={} and body=whole text."""
+    text = text.lstrip("\ufeff")
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            try:
+                import yaml
+                meta = yaml.safe_load(text[3:end]) or {}
+                if not isinstance(meta, dict):
+                    meta = {}
+            except Exception:
+                meta = {}
+            return meta, text[end + 4:].lstrip("\n")
+    return {}, text
+
+
+def render_note(key, category, body, source, created, updated):
+    """Build a markdown note string with frontmatter."""
+    import yaml
+    meta = {"key": key, "category": category, "source": source,
+            "created": created, "updated": updated}
+    fm = yaml.safe_dump(meta, sort_keys=True, allow_unicode=True).strip()
+    return f"---\n{fm}\n---\n\n{body.strip()}\n"
 
 class WikiKB:
-    """Editable, disk-backed wiki. {key, body, source, created, updated}."""
+    """Editable, disk-backed markdown VAULT. Notes live under
+    data/vault/<category>/<slug>.md. Same resolve() contract as before
+    (exact key + fuzzy token Jaccard) so the rest of the stack is unchanged.
+    """
+
     _inst = None
 
     @classmethod
-    def get(cls, path=WIKI_PATH):
+    def get(cls, root=VAULT_ROOT):
         if cls._inst is None:
-            cls._inst = WikiKB(path)
+            cls._inst = WikiKB(root)
         return cls._inst
 
-    def __init__(self, path=WIKI_PATH):
-        self.path = path
-        self.entries = []          # list of dicts (in file order)
+    def __init__(self, root=VAULT_ROOT):
+        self.root = root
+        self.entries = []          # list of dicts (key, body, source, category,
+                                   # created, updated, path)
         self.load()
 
     def load(self):
         self.entries = []
-        if not os.path.exists(self.path):
+        if not os.path.isdir(self.root):
+            self._idx = {}
             return
-        with open(self.path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
+        for dirpath, _, files in os.walk(self.root):
+            for fn in files:
+                if not fn.endswith(".md"):
                     continue
+                full = os.path.join(dirpath, fn)
                 try:
-                    self.entries.append(json.loads(line))
+                    with open(full, encoding="utf-8") as fh:
+                        meta, body = parse_frontmatter(fh.read())
                 except Exception:
                     continue
-        # index by normalized key for exact lookups
-        self._idx = {norm(e.get("key", "")): e for e in self.entries}
+                cat = meta.get("category", DEFAULT_CATEGORY)
+                key = meta.get("key", fn[:-3])
+                self.entries.append({
+                    "key": key, "body": body.strip(),
+                    "source": meta.get("source", "unknown"),
+                    "category": cat,
+                    "created": meta.get("created"),
+                    "updated": meta.get("updated"),
+                    "path": full,
+                })
+        self._idx = {norm(e["key"]): e for e in self.entries}
 
     def resolve(self, query: str):
         """Exact key match, else fuzzy token Jaccard over keys+bodies."""
@@ -236,55 +289,78 @@ class WikiKB:
             return {"verdict": "empty", "answer": None,
                     "matched": None, "method": "wiki"}
         nq = norm(query)
-        # 1. exact key
         if nq in self._idx:
             e = self._idx[nq]
             return {"verdict": "hit", "answer": e["body"],
-                    "matched": e.get("key"), "method": "wiki-exact"}
-        # 2. fuzzy over key tokens (and body tokens as a weaker signal)
+                    "matched": e["key"], "method": "wiki-exact",
+                    "category": e.get("category"), "path": e.get("path")}
         qt = toks(query)
         if qt:
             best, best_e, best_m = 0.0, None, None
             for e in self.entries:
-                kt = toks(e.get("key", ""))
-                bt = toks(e.get("body", ""))
+                kt = toks(e["key"])
+                bt = toks(e["body"])
                 jk = len(qt & kt) / len(qt | kt) if kt else 0.0
                 jb = len(qt & bt) / len(qt | bt) if bt else 0.0
-                j = max(jk, jb * 0.9)   # body match weighted slightly lower
+                j = max(jk, jb * 0.9)
                 if j > best:
-                    best, best_e, best_m = j, e, ("wiki-key" if jk >= jb else "wiki-body")
+                    best, best_e, best_m = j, e, ("wiki-key" if jk >= jb
+                                                   else "wiki-body")
             if best >= WIKI_FUZZY_THRESH:
                 return {"verdict": "hit", "answer": best_e["body"],
-                        "matched": best_e.get("key"),
-                        "method": f"{best_m} jaccard={best:.2f}"}
+                        "matched": best_e["key"],
+                        "method": f"{best_m} jaccard={best:.2f}",
+                        "category": best_e.get("category"),
+                        "path": best_e.get("path")}
         return {"verdict": "miss", "answer": None,
                 "matched": None, "method": "wiki"}
 
-    def write(self, key: str, body: str, source: str = "human"):
-        """Upsert an entry by key. Returns ('created'|'updated', entry)."""
-        nk = norm(key)
+    def write(self, key: str, body: str, source: str = "human",
+              category: str = DEFAULT_CATEGORY):
+        """Upsert a note. Returns ('created'|'updated', entry)."""
         now = __import__("datetime").datetime.now(
             __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        for e in self.entries:
-            if norm(e.get("key", "")) == nk:
-                e["body"] = body
-                e["source"] = source
-                e["updated"] = now
-                self._save()
-                return "updated", e
-        e = {"key": key, "body": body, "source": source,
-             "created": now, "updated": now}
-        self.entries.append(e)
-        self._save()
-        return "created", e
+        nk = norm(key)
+        existing = self._idx.get(nk)
+        if existing is not None:
+            entry = existing
+            entry["body"] = body
+            entry["source"] = source
+            entry["category"] = category or entry.get("category", DEFAULT_CATEGORY)
+            entry["updated"] = now
+            action = "updated"
+        else:
+            entry = {"key": key, "body": body, "source": source,
+                     "category": category or DEFAULT_CATEGORY,
+                     "created": now, "updated": now, "path": None}
+            self.entries.append(entry)
+            action = "created"
+        self._persist(entry)
+        self._idx[norm(entry["key"])] = entry
+        return action, entry
 
-    def propose_write(self, key: str, body: str, source: str = "model"):
+    def _persist(self, entry):
+        """Write a single note file under data/vault/<category>/<slug>.md."""
+        cat = (entry.get("category") or DEFAULT_CATEGORY).strip() or DEFAULT_CATEGORY
+        cat = re.sub(r"[^a-zA-Z0-9 _-]", "", cat).strip() or DEFAULT_CATEGORY
+        d = os.path.join(self.root, cat)
+        os.makedirs(d, exist_ok=True)
+        slug = slugify(entry["key"])
+        path = os.path.join(d, slug + ".md")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(render_note(
+                entry["key"], cat, entry["body"], entry["source"],
+                entry.get("created") or entry["updated"],
+                entry["updated"]))
+        entry["path"] = path
+
+    def propose_write(self, key: str, body: str, source: str = "model",
+                      category: str = DEFAULT_CATEGORY):
         """Phase 7 #1: build a proposed write WITHOUT mutating the store.
 
-        Returns a dict with verdict='proposed_write' and the would-be entry.
-        The caller must gate this through a human (commit_write) before it
-        lands in data/wiki/wiki.jsonl. Sovereign by design: the model can
-        *propose*, never *poison*.
+        `category` is the MODEL'S SUGGESTION (shown to the human for
+        approval/change). Returns verdict='proposed_write'. Sovereign: the
+        model can *propose*, never *poison*.
         """
         nk = norm(key)
         now = __import__("datetime").datetime.now(
@@ -292,31 +368,52 @@ class WikiKB:
         exists = nk in self._idx
         action = "updated" if exists else "created"
         entry = {"key": key, "body": body, "source": source,
+                 "category": category or DEFAULT_CATEGORY,
                  "created": now, "updated": now}
         return {"verdict": "proposed_write", "answer": body,
                 "matched": key, "method": "wiki_write",
                 "action": action, "exists": exists,
+                "category": category or DEFAULT_CATEGORY,
                 "entry": entry, "needs_approval": True}
 
     def commit_write(self, entry: dict, source: str = "model-approved"):
-        """GATED write: only call this after explicit human approval.
-
-        Appends/updates the entry in the store. Returns ('created'|'updated', e).
-        """
+        """GATED write: only call after explicit human approval."""
         return self.write(entry.get("key", ""), entry.get("body", ""),
-                          source=source)
+                          source=source,
+                          category=entry.get("category", DEFAULT_CATEGORY))
 
-    def _save(self):
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            for e in self.entries:
-                fh.write(json.dumps(e, ensure_ascii=False) + "\n")
-        os.replace(tmp, self.path)   # atomic
+    # ---- legacy jsonl bridge (used by the one-time migration only) ----
+    @staticmethod
+    def migrate_jsonl(jsonl_path=WIKI_PATH, root=VAULT_ROOT):
+        """Convert a legacy wiki.jsonl into the markdown vault. Idempotent:
+        skips keys that already exist in the vault."""
+        if not os.path.exists(jsonl_path):
+            return 0
+        created = 0
+        vault = WikiKB(root)
+        with open(jsonl_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                except Exception:
+                    continue
+                key = e.get("key", "")
+                if not key:
+                    continue
+                if norm(key) in vault._idx:
+                    continue
+                vault.write(key, e.get("body", ""),
+                            source=e.get("source", "migrated"),
+                            category=DEFAULT_CATEGORY)
+                created += 1
+        return created
 
 
 def lookup(query: str, kb: KB = None, wiki: WikiKB = None):
-    """Phase 7 READ path: static KB first, then fall through to the wiki."""
+    """Phase 7 READ path: static KB -> vault -> live web (SearXNG)."""
     if kb is None:
         kb = KB.get()
     r = kb.resolve(query)
@@ -324,7 +421,48 @@ def lookup(query: str, kb: KB = None, wiki: WikiKB = None):
         return r
     if wiki is None:
         wiki = WikiKB.get()
-    return wiki.resolve(query)
+    r = wiki.resolve(query)
+    if r["verdict"] == "hit":
+        return r
+    # final fallback: live web search (never auto-saved -> no poison)
+    return web(query)
+
+
+def web(query: str, max_results: int = 3):
+    """Phase 7 web fallback: query a SearXNG JSON endpoint (env SEARXNG_URL).
+
+    Returns a 'hit' whose answer is a synthesized snippet from the top
+    results. Sovereign: web answers are shown but NEVER written to the vault
+    automatically — the human may save them via the gated wiki_write flow.
+    """
+    import urllib.parse
+    import urllib.request
+    base = os.environ.get("SEARXNG_URL", "").rstrip("/")
+    if not base:
+        return {"verdict": "no_web", "answer": None, "matched": None,
+                "method": "web", "error": "SEARXNG_URL not set"}
+    url = f"{base}/search?q={urllib.parse.quote(query)}&format=json"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "smol-tomoc/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        return {"verdict": "web_error", "answer": None, "matched": None,
+                "method": "web", "error": str(e)}
+    results = data.get("results", [])[:max_results]
+    if not results:
+        return {"verdict": "miss", "answer": None, "matched": None,
+                "method": "web"}
+    snippets = []
+    for r in results:
+        title = r.get("title", "").strip()
+        content = re.sub(r"\s+", " ", r.get("content", "")).strip()
+        if content:
+            snippets.append(f"- {title}: {content}")
+    answer = "\n".join(snippets) if snippets else "(web returned no snippets)"
+    return {"verdict": "hit", "answer": answer, "matched": query,
+            "method": "web", "source": "web", "urls":
+            [r.get("url", "") for r in results]}
 def resolve(tool: str, query: str, kb: KB = None):
     """Entry point. tool-agnostic: route to the right backend by name.
 
@@ -351,13 +489,14 @@ def resolve(tool: str, query: str, kb: KB = None):
             return {"verdict": "malformed_write", "answer": None,
                     "matched": None, "method": "wiki_write",
                     "error": "wiki_write needs key + body"}
-        key, body = query.split("\u0001", 1)
-        key, body = key.strip(), body.strip()
+        parts = query.split("\u0001", 2)
+        key, body = parts[0].strip(), parts[1].strip()
+        category = parts[2].strip() if len(parts) > 2 else ""
         if not key or not body:
             return {"verdict": "malformed_write", "answer": None,
                     "matched": None, "method": "wiki_write",
                     "error": "empty key or body"}
-        return WikiKB.get().propose_write(key, body)
+        return WikiKB.get().propose_write(key, body, category=category)
     if tool == "run_code":
         # Guard: a run_code call with empty/None/non-string code must not reach
         # ast.parse (compile(None) crashes). Model sometimes emits
@@ -399,24 +538,42 @@ def main():
     ap.add_argument("--wiki-set", nargs=2, metavar=("KEY", "BODY"),
                     help="alias for --wiki-add (explicit upsert)")
     ap.add_argument("--wiki-stats", action="store_true",
-                    help="print wiki entry count and exit")
+                    help="print vault note count and exit")
     # Phase 7 #1: model-proposed write, gated behind --approve (no silent poison)
     ap.add_argument("--wiki-write", nargs=2, metavar=("KEY", "BODY"),
                     help="PROPOSE a wiki write (key + body); requires --approve "
-                         "to actually commit to data/wiki/wiki.jsonl")
+                         "to actually commit to the vault")
+    ap.add_argument("--category", default=DEFAULT_CATEGORY,
+                    help="category folder for --wiki-write/--wiki-add "
+                         f"(default: {DEFAULT_CATEGORY})")
     ap.add_argument("--approve", dest="approve", action="store_true",
-                    help="commit a --wiki-write proposal to the store")
+                    help="commit a --wiki-write proposal to the vault")
+    # Phase 7 web fallback (SearXNG)
+    ap.add_argument("--web", metavar="QUERY",
+                    help="query the live SearXNG web search (SEARXNG_URL env)")
+    ap.add_argument("--web-stats", action="store_true",
+                    help="print whether SEARXNG_URL is configured")
+    ap.add_argument("--migrate", action="store_true",
+                    help="one-time: convert legacy data/wiki/wiki.jsonl -> vault")
     args = ap.parse_args()
+
+    if args.migrate:
+        n = WikiKB.migrate_jsonl()
+        print(json.dumps({"migrated": n, "vault": VAULT_ROOT},
+                         ensure_ascii=False))
+        return
 
     if args.wiki_add or args.wiki_set:
         key, body = (args.wiki_add or args.wiki_set)
-        action, e = WikiKB.get().write(key, body, source="human")
+        action, e = WikiKB.get().write(key, body, source="human",
+                                       category=args.category)
         print(json.dumps({"action": action, **e}, ensure_ascii=False))
         return
 
     if args.wiki_write:
         key, body = args.wiki_write
-        prop = WikiKB.get().propose_write(key, body, source="model")
+        prop = WikiKB.get().propose_write(key, body, source="model",
+                                          category=args.category)
         if not args.approve:
             # gate: show the proposal, do NOT mutate
             print(json.dumps({**prop,
@@ -429,9 +586,24 @@ def main():
                          ensure_ascii=False))
         return
 
+    if args.web:
+        r = web(args.web)
+        print(json.dumps({"tool": "web", "query": args.web, **r},
+                         ensure_ascii=False))
+        return
+
+    if args.web_stats:
+        print(f"SEARXNG_URL : {os.environ.get('SEARXNG_URL', '(not set)')}")
+        return
+
     if args.wiki_stats:
         w = WikiKB.get()
-        print(f"wiki entries : {len(w.entries)}")
+        cats = {}
+        for e in w.entries:
+            cats[e.get("category", DEFAULT_CATEGORY)] = \
+                cats.get(e.get("category", DEFAULT_CATEGORY), 0) + 1
+        print(f"vault notes : {len(w.entries)}")
+        print(f"categories  : {cats}")
         return
 
     if args.stats:

@@ -20,6 +20,11 @@ models/
 adapters/
 logs/
 data/processed/
+data/raw/flashcards2.jsonl
+# legacy jsonl store (superseded by vault)
+data/wiki/
+# Obsidian-style markdown vault (local knowledge, not shared)
+data/vault/
 benchmarks/*.json
 benchmarks/*.csv
 benchmarks/*.db
