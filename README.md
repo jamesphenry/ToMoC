@@ -12,6 +12,18 @@
 > owns the *decision of where knowledge lives* — not the knowledge itself.
 > Everything here is experimental, fast-and-loose, villain-coded.
 
+## TL;DR — how a tiny model "passes" gsm8k
+A 135m–360m base model is hopeless at math/recall on its own (gsm8k_test
+baseline **1.74%**). The trick: don't make it *smarter*, make it *ask*. We LoRA-train
+it to emit tiny tool-call scripts instead of guessing — `TOOL lookup query="..."`
+for facts and `TOOL run_code code="..."` for arithmetic — and resolve those calls
+externally (KB/vault/web + a sandboxed executor). Reasoning becomes "route to the
+right function," and the function is the knowledge. That habit lifts gsm8k_test from
+**1.7% → 99.8%** (v12, 360m) without ever growing the model. The full 7-dataset
+capability audit across adapters v1→v17 is in
+[benchmarks/adapter_comparison.md](benchmarks/adapter_comparison.md) (the `math_gsm`
+column there is a 15-item regex sample, *not* the full gsm8k_test).
+
 ## A note on how this was built
 
 This is a **learning exercise**, not a product. The goal is to understand a
