@@ -562,6 +562,70 @@ the flag-to-dataset human-in-the-loop design that gates any autonomous KB write.
 
 ---
 
+## PHASE 7 — disk-backed LLM-wiki vault (READ/WRITE) + web fallback (pass 45-50)
+
+The moonshot is DONE. Replaced the static 8.9k gsm8k KB with a live,
+human-editable **Obsidian-style markdown vault** (`data/vault/<category>/<slug>.md`
++ YAML frontmatter) the model READS and WRITES, plus a **SearXNG web fallback**
+folded into `lookup` so unknowns get answered live instead of a bare
+`MISS_RESULT`.
+
+**Fork #1 — WRITE, gated (v16, pass 49).** `TOOL wiki_write key="..." body="..."`
+→ resolver returns `verdict=proposed_write` ONLY; it NEVER mutates the store.
+Human commits via `tool_resolver.py --wiki-write ... --approve`. Verified the
+model emits the call on save-instructions; gate blocks all auto-mutation
+(malformed/truncated → `malformed_write`). BUG-011 fixed: `WIKIWRITE_RE` now
+tolerates `body(?:\s+text)?=` drift, still rejecting unclosed quotes.
+
+**Fork #2 — READ (v14)** routes `TOOL wiki` to the vault; the model ECHOES the
+body as its final answer (verified v14).
+
+**v17 (pass 50, 360m, 3617 cards, loss 0.1357.**) — the consolidated Phase-7
+capability:
+- **Type-H now carries `category=`**: model emits `TOOL wiki_write key="..."
+  body="..." category="..."`. The `category=` is the **MODEL'S SUGGESTION** —
+  the human approves or changes it. `--chat` shows the suggested category,
+  lets you retype, then asks `save to vault? [y/N]` — no automatic saves.
+- **SearXNG web fallback folded into `lookup`** (KB→vault→web). Web results
+  shown as the final answer but **never auto-saved** (no poison). Resolver
+  reads `SEARXNG_URL` at runtime (set in `~/.bashrc`).
+- One-time migration of the legacy `data/wiki/wiki.jsonl` (128 entries) →
+  `data/vault/general/` via `tool_resolver.py --migrate`.
+
+**Verification (ad-hoc, GPU, pass 50):**
+- 4 template-matched save-instructions → all emit
+  `TOOL wiki_write key="..." body="..." category="..."`, verdict `proposed_write`
+  (no auto-mutation, no BUG-011 drift).
+- Unknown Q (Reykjavik population) → web fallback returned "133,000" (NOT
+  `MISS_RESULT`).
+- lookup (Canberra ✓) + run_code (63 ✓) still correct.
+- Cost: pass 50 $0.0166, ~79 min train, 2005 MB GPU. Project total 50 passes /
+  20.03 GPU-h / **$0.2524**.
+
+**Capability-audit harness (`scripts/audit_capabilities.py`, pass 45-era prep):**
+runs the REAL ToMoC loop across the `~/llm_eval/datasets` capability suite
+(brainteasers, hallucination, reasoning_logic, coding_func, knowledge_qa,
+summarization, math_gsm). Pluggable judge (`--judge local` 1.7b sovereign-weak,
+or `--judge ollama:qwen2.5:1.5b` over localhost HTTP — ollama-benchmark style).
+`--model a b c` → COMPARE mode → `benchmarks/adapter_comparison.md`. Not yet
+run across all adapters; pending ollama re-enable + `ollama pull qwen2.5:1.5b`.
+
+## What's next (directions — open, not yet chosen)
+
+PHASE 7 is delivered (vault read/write + web fallback + gated write). Levers now:
+
+1. **Run the full 18-adapter capability comparison** (prep done, harness
+   verified) once ollama is re-enabled with `qwen2.5:1.5b` as judge — gives the
+   version-vs-version table across the whole lineage.
+2. **Close the ~4% residual** (KB re-wording gaps + rare arithmetic slips) — the
+   only open accuracy item; router/loop already at ceiling.
+3. **From-scratch (North Star, deferred).** Build the base model ourselves once
+   the concept + features are proven here.
+
+User decision: keep pushing. Sovereignty + KISS stay the constraints.
+
+---
+
 ## How to extend this journal
 Append a new dated section per milestone. Keep the passdb table honest (include
 the buggy runs — they're data). Link bugs to BUGS.md, ideas to future.md.
