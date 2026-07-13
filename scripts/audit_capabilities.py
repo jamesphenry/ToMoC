@@ -132,10 +132,12 @@ class OllamaJudge:
         self.url = "http://localhost:11434/api/generate"
 
     def grade(self, prompt):
+        # temperature:0 -> greedy/deterministic judging (reproducible scores).
         payload = json.dumps({
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "options": {"temperature": 0},
         }).encode()
         req = urllib.request.Request(
             self.url, data=payload,
@@ -173,7 +175,12 @@ def judge_one(judge, task, thinking, output, rubric):
 # --------------------------------------------------------------------------
 # audit one model across all sets
 # --------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# audit one model across all sets  (BATCHED two-pass loop, BUG-005/007)
+# -------------------------------------------------------------------------
 def run_audit(engine, judge, sets, args, model_label):
+    from orchestrate import (format_prompt, parse_call, resolve,
+                             build_turn2_prompt, CHUNK)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     log_path = os.path.join(ROOT, "logs",
                             f"audit_{model_label}_{ts}.jsonl")
@@ -195,20 +202,70 @@ def run_audit(engine, judge, sets, args, model_label):
             items = items[:args.max]
         print(f"--- {name} (dataset scorer={ds_scorer}, n={len(items)}) ---",
               flush=True)
-        correct = 0
-        for i, it in enumerate(items):
+
+        # --- extract q / gold / scorer per item ---
+        qs, golds, scorers = [], [], []
+        for it in items:
             q = it.get("prompt") or it.get("question")
             gold = it.get("expected") or it.get("answer")
-            # per-item scorer wins if present (e.g. hallucination.json mixes
-            # closed-fact `contains` with trap `llm_judge` rows)
             scorer = it.get("scorer") or ds_scorer
-            rec = run_question(engine, None, q, gold, verbose=False)
+            qs.append(q)
+            golds.append(gold)
+            scorers.append(scorer)
+
+        # --- PASS 1: all turn-1 (emit TOOL call or direct answer), batched ---
+        t1_prompts = [format_prompt({"q": q}) for q in qs]
+        t1_outs = engine.generate_all(t1_prompts, chunk=CHUNK)
+
+        # --- resolve each call (cheap, CPU) ---
+        results, t2_prompts = [], []
+        for q, out1 in zip(qs, t1_outs):
+            out1 = out1.strip()
+            did_call, tool, query, wf = parse_call(out1)
+            if did_call:
+                res = resolve(tool, query, None)
+                results.append(res)
+                result_str = (res.get("answer") if res.get("verdict") == "hit"
+                              else "No answer found in the knowledge base.")
+                t2_prompts.append(
+                    build_turn2_prompt(format_prompt({"q": q}), out1, result_str))
+            else:
+                results.append(None)
+                t2_prompts.append(None)
+
+        # --- PASS 2: all turn-2 (feed result back -> final answer), batched ---
+        t2_outs = [None] * len(items)
+        batch_t2 = [(i, p) for i, p in enumerate(t2_prompts) if p is not None]
+        if batch_t2:
+            prompts = [p for _, p in batch_t2]
+            gen = engine.generate_all(prompts, chunk=CHUNK)
+            for (i, _), o in zip(batch_t2, gen):
+                t2_outs[i] = o.strip()
+
+        # --- score + log each row (logic identical to run_question) ---
+        correct, rows = 0, []
+        for i, (q, gold, sc) in enumerate(zip(qs, golds, scorers)):
+            out1 = t1_outs[i].strip()
+            did_call, tool, query, wf = parse_call(out1)
+            res = results[i]
+            rec = {"called": did_call, "tool": tool, "query": query,
+                   "turn1": out1, "resolved": res}
+            if not did_call:
+                rec["final_answer"] = out1
+            else:
+                if res and res.get("verdict") == "proposed_write":
+                    rec["final_answer"] = (
+                        f"[PROPOSED wiki write] key={res.get('matched')!r} "
+                        f"body={res.get('answer')!r} (needs human approval)")
+                else:
+                    rec["final_answer"] = t2_outs[i]
+
             ok = None
-            if scorer == "contains":
+            if sc == "contains":
                 ok = score_contains(rec["final_answer"], gold)
-            elif scorer == "regex":
+            elif sc == "regex":
                 ok = score_regex(rec["final_answer"], gold)
-            elif scorer == "llm_judge":
+            elif sc == "llm_judge":
                 if judge is None:
                     ok = None
                 else:
@@ -220,16 +277,19 @@ def run_audit(engine, judge, sets, args, model_label):
                     rec["judge_reason"] = reason
             if ok:
                 correct += 1
-            row = {"set": name, "scorer": scorer, "idx": i,
+            row = {"set": name, "scorer": sc, "idx": i,
                    "prompt": q, "gold": gold, "correct": ok,
                    "called": rec["called"], "tool": rec["tool"],
                    "verdict": (rec.get("resolved") or {}).get("verdict"),
                    "final_answer": rec["final_answer"]}
-            with open(log_path, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+            rows.append(row)
             mark = "OK " if ok else ("NO " if ok is False else "?? ")
-            print(f"  {mark}[{i+1}/{len(items)}] ({scorer}) {q[:54]!r} "
+            print(f"  {mark}[{i+1}/{len(items)}] ({sc}) {q[:54]!r} "
                   f"-> {str(rec['final_answer'])[:46]!r}", flush=True)
+
+        with open(log_path, "a", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
         pct = correct / len(items) if items else 0.0
         summary.append((name, ds_scorer, len(items), correct, pct))
         print(f"  => {name}: {correct}/{len(items)} = {pct:.2f} "
