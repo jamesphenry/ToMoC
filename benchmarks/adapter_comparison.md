@@ -1,5 +1,16 @@
 # Adapter Capability Comparison
 
+## TL;DR — how a tiny model "passes" gsm8k
+A 135m–360m base model is hopeless at math/recall on its own (gsm8k_test
+baseline **1.74%**). The trick: don't make it *smarter*, make it *ask*. We LoRA-train
+it to emit tiny tool-call scripts instead of guessing — `TOOL lookup query="..."`
+for facts and `TOOL run_code code="..."` for arithmetic — and resolve those calls
+externally (KB/vault/web + a sandboxed executor). Reasoning becomes "route to the
+right function," and the function is the knowledge. That habit lifts gsm8k_test from
+**1.7% → 99.8%** (v12, 360m) without ever growing the model. The table below is a
+7-dataset capability audit showing how that routing habit evolved across adapters
+v1→v17 (the `math_gsm` column is a 15-item regex sample, *not* the full gsm8k_test).
+
 Generated 2026-07-13 04:20 UTC by `scripts/audit_capabilities.py` (judge backend: **ollama:qwen2.5:1.5b**).
 
 > **Reading this:** `contains`/`regex` columns are deterministic and trustworthy. `llm_judge` columns are graded by the judge backend above -- if it is the local 1.7b, treat those numbers as **directional only** (a weak grader). If it is `ollama:qwen2.5`, they are a much stronger signal but still automated.
